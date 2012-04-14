@@ -1,0 +1,50 @@
+8 bit instructions: first 4 bits (hex digit) for opcode
+16 general purpose registers (r0-rF) + 1 register for constant building (cb)
+registers are all 32 bits
+s1 and s2 both initially point to r0, but can point to any register
+
+execution cycle: 
+load instruction[pc]
+pcn = pc + 1
+execute instruction
+pc = pcn
+
+executing jump instructions:
+rF = pcn
+pcn = (destination)
+cb = 0
+
+0_ no-op
+1x cb = cb << 4 | x
+2x make s1 point to rx
+3x make s2 point to rx
+4x rx = cb; cb = 0
+5x rx = mem[s1]
+6x mem[s2] = rx
+7x rx = s1
+8x jump rx
+9x conditional jump rx (if s1 > s2)
+Ax s1 = rx
+Bx input to rx
+Cx output from rx
+Dx output from rx
+Ex io channel/fd x
+Fx arithmetic: s1 = s1 op s2 where op =
+	0 +
+	1 -
+	2 *
+	3 /
+	4 %
+	5 ~
+	6 &
+	7 |
+	8 <<
+	9 >>
+	A (set 0)
+	B (set 1)
+	C (set 0)
+	D (set 1)
+	E (set 0)
+	F (set 0xFFFFFFFF)
+	(where unary operators are shown: operand is s2)
+
