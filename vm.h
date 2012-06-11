@@ -10,7 +10,7 @@ typedef struct _heapPage {
 } heapPage;
 
 typedef unsigned int (*inputFunction)(void *);
-typedef unsigned int (*outputFunction)(void *, int);
+typedef void (*outputFunction)(void *, int);
 
 typedef struct _output {
 	outputFunction sink;

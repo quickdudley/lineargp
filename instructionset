@@ -14,6 +14,7 @@ rF = pcn
 pcn = (destination)
 cb = 0
 
+0F halt
 0_ no-op
 1x cb = cb << 4 | x
 2x make s1 point to rx
@@ -24,9 +25,9 @@ cb = 0
 7x rx = s1
 8x jump rx
 9x conditional jump rx (if s1 > s2)
-Ax s1 = rx
-Bx input to rx
-Cx output from rx
+Ax conditional jump rx (if s1 = s2)
+Bx s1 = rx
+Cx input to rx
 Dx output from rx
 Ex io channel/fd x
 Fx arithmetic: s1 = s1 op s2 where op =
