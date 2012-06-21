@@ -126,7 +126,59 @@ int vmStep(genome *g, environment *env) {
 	else if(h == 0xD0) {
 		if(env->oo[env->fd].sink != NULL) {
 			env->oo[env->fd].sink(env->oo[l].context, env->rgs[l]);
+			return 0;
 		}
+	}
+	else if(h == 0xE0) {
+		env->fd = l;
+		return 0;
+	}
+	else if(h == 0xF0) {
+		switch(l) {
+		case 0x0:
+			env->rgs[env->s1] = env->rgs[env->s1] + env->rgs[env->s2];
+			break;
+		case 0x1:
+			env->rgs[env->s1] = env->rgs[env->s1] - env->rgs[env->s2];
+			break;
+		case 0x2:
+			env->rgs[env->s1] = env->rgs[env->s1] * env->rgs[env->s2];
+			break;
+		case 0x3:
+			env->rgs[env->s1] = env->rgs[env->s1] / env->rgs[env->s2];
+			break;
+		case 0x4:
+			env->rgs[env->s1] = env->rgs[env->s1] % env->rgs[env->s2];
+			break;
+		case 0x5:
+			env->rgs[env->s1] = ~(env->rgs[env->s2]);
+			break;
+		case 0x6:
+			env->rgs[env->s1] = env->rgs[env->s1] & env->rgs[env->s2];
+			break;
+		case 0x7:
+			env->rgs[env->s1] = env->rgs[env->s1] | env->rgs[env->s2];
+			break;
+		case 0x8:
+			env->rgs[env->s1] = env->rgs[env->s1] << env->rgs[env->s2];
+			break;
+		case 0x9:
+			env->rgs[env->s1] = env->rgs[env->s1] >> env->rgs[env->s2];
+			break;
+		case 0xA:
+		case 0xC:
+		case 0xE:
+			env->rgs[env->s1] = 0;
+			break;
+		case 0xB:
+		case 0xD:
+			env->rgs[env->s1] = 1;
+			break;
+		case 0xF:
+			env->rgs[env->s1] = 0xFFFFFFFF;
+			break;
+		}
+		return 0;
 	}
 	return -1;
 }

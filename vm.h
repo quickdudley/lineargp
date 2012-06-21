@@ -35,8 +35,8 @@ typedef struct _environment {
 	unsigned int pcn;
 } environment;
 
-typedef environment (*setupEnvironmentFunction)(void);
-typedef void (*takedownEnvironmentFunction)(environment);
+typedef (environment *) (*setupEnvironmentFunction)(void);
+typedef void (*takedownEnvironmentFunction)(environment *);
 
 typedef struct _environmentTemplate {
 	setupEnvironmentFunction setup;
