@@ -57,7 +57,7 @@ unsigned char vmFetch(genome **g, unsigned int *pc) {
 		return (*g)->first.instructions[0];
 	} else if((*g)->first.execution_position < block) {
 		*pc = UINT_MAX;
-		return 0;
+		return 0x0F; // halt
 	} else {
 		int x = *pc % 16;
 		return (*g)->first.instructions[x];
@@ -183,4 +183,16 @@ int vmStep(genome *g, environment *env) {
 	return -1;
 }
 
+int vmRun(genome *g, environment *env, long long int steps){
+	int penalty;
+	while(steps > 0) {
+		int result = vmStep(g, env);
+		if(result > 0) {
+			steps = 0;
+		} else {
+			penalty -= result;
+		}
+		steps--;
+	}
+}
 

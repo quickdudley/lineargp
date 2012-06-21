@@ -35,7 +35,7 @@ typedef struct _environment {
 	unsigned int pcn;
 } environment;
 
-typedef (environment *) (*setupEnvironmentFunction)(void);
+typedef environment * (*setupEnvironmentFunction)(void);
 typedef void (*takedownEnvironmentFunction)(environment *);
 
 typedef struct _environmentTemplate {
@@ -43,6 +43,8 @@ typedef struct _environmentTemplate {
 	takedownEnvironmentFunction takedown;
 } environmentTemplate;
 
+//return value for vmStep is the incurred penalty for doing undesirable things
 int vmStep(genome *g, environment *env);
+int vmRun(genome *g, environment *env, long long int steps);
 
 #endif

@@ -3,7 +3,7 @@ OBJECTS = main.o vmgenome.o vm.o
 all: vmgenome
 
 vmgenome: $(OBJECTS)
-	gcc $(OBJECTS) -o vmgenome
+	gcc -g $(OBJECTS) -o vmgenome
 
-%.o : %.cc
-	gcc -c $< -o $@
+%.o : %.c
+	gcc -g -c $< -o $@
