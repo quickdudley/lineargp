@@ -10,16 +10,19 @@ typedef struct _heapPage {
 } heapPage;
 
 typedef unsigned int (*inputFunction)(void *);
-typedef void (*outputFunction)(void *, int);
+// return value for outputFunction: see vmStep()
+typedef int (*outputFunction)(void *, int);
 
 typedef struct _output {
 	outputFunction sink;
 	void * context;
+	int closed;
 } output;
 
 typedef struct _input {
 	inputFunction source;
 	void * context;
+	int exhausted;
 } input;
 
 typedef struct _environment {
@@ -35,7 +38,7 @@ typedef struct _environment {
 	unsigned int pcn;
 } environment;
 
-typedef environment * (*setupEnvironmentFunction)(void);
+typedef environment * (*setupEnvironmentFunction)(environment *);
 typedef void (*takedownEnvironmentFunction)(environment *);
 
 typedef struct _environmentTemplate {
@@ -43,7 +46,9 @@ typedef struct _environmentTemplate {
 	takedownEnvironmentFunction takedown;
 } environmentTemplate;
 
-//return value for vmStep is the incurred penalty for doing undesirable things
+//return value for vmStep: 0 for neutral,
+// negative for penalty, positive to abort (greater than one
+// to both abort and give penalty)
 int vmStep(genome *g, environment *env);
 int vmRun(genome *g, environment *env, long long int steps);
 

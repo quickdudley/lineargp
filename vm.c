@@ -120,13 +120,26 @@ int vmStep(genome *g, environment *env) {
 	else if(h == 0xC0) {
 		if(env->ii[env->fd].source != NULL) {
 			env->rgs[l] = env->ii[env->fd].source(env->ii[env->fd].context);
+			if(env->rgs[l] == -1) {
+				if(env->ii[env->fd].exhausted) {
+					return -1;
+				} else {
+					env->ii[env->fd].exhausted = 1;
+				}
+			}
 			return 0;
 		}
 	}
 	else if(h == 0xD0) {
 		if(env->oo[env->fd].sink != NULL) {
-			env->oo[env->fd].sink(env->oo[l].context, env->rgs[l]);
-			return 0;
+			if(!env->oo[env->fd].closed) {
+				int rv = env->oo[env->fd].sink(env->oo[l].context, env->rgs[l]);
+				if(env->rgs[l] == -1) {
+					env->oo[env->fd].closed = 1;
+				}
+				return rv;
+			}
+			return -2;
 		}
 	}
 	else if(h == 0xE0) {
@@ -189,10 +202,12 @@ int vmRun(genome *g, environment *env, long long int steps){
 		int result = vmStep(g, env);
 		if(result > 0) {
 			steps = 0;
+			penalty += result - 1;
 		} else {
 			penalty -= result;
 		}
 		steps--;
 	}
+	return penalty;
 }
 
