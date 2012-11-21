@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "vmgenome.h"
+
+#define MUTATION_THRESHOLD (RAND_MAX * 0.05)
 
 static void sort_genome(genome * unsorted, int criterion);
 
@@ -158,3 +161,57 @@ genome * random_genome(int size)
 	}
 	return r;
 }
+
+genome * copy_genome(genome *original)
+{
+	if(original == NULL)
+		return NULL;
+	genome *n, *t, *i;
+	n = NULL;
+	t = NULL;
+	while(original != NULL) {
+		i = malloc(sizeof(genome));
+		if(n == NULL)
+			n = i;
+		memcpy(&(i->first), &(original->first), sizeof(i->first));
+		i->next = NULL;
+		i->prev = t;
+		if(t != NULL)
+			t->next = i;
+		t = i;
+		original = original->next;
+	}
+	return n;
+}
+
+void mutate_genome(genome *x)
+{
+	genome *t = x;
+	while(t != NULL) {
+		if(random() < MUTATION_THRESHOLD) {
+			t->first.crossover_position = random() / 2;
+			genome *c = x;
+			while(c != NULL) {
+				if(c != t && t->first.crossover_position >= c->first.crossover_position) {
+					t->first.crossover_position++;
+				}
+			}
+		}
+		if(random() < MUTATION_THRESHOLD) {
+			t->first.execution_position = random() / 2;
+			genome *c = x;
+			while(c != NULL) {
+				if(c != t && t->first.execution_position >= c->first.execution_position) {
+					t->first.execution_position++;
+				}
+			}
+		}
+		for(int i = 0; i < sizeof(t->first.instructions); i++) {
+			if(random() < MUTATION_THRESHOLD) {
+				t->first.instructions[i] = (char)(random() & 0xFF);
+			}
+		}
+		t = t->next;
+	}
+}
+

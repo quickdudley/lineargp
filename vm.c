@@ -196,17 +196,17 @@ int vmStep(genome *g, environment *env) {
 	return -1;
 }
 
-int vmRun(genome *g, environment *env, long long int steps){
+int vmRun(genome *g, environment *env, long long int *steps){
 	int penalty;
-	while(steps > 0) {
+	while(*steps > 0) {
 		int result = vmStep(g, env);
 		if(result > 0) {
-			steps = 0;
+			*steps = 0;
 			penalty += result - 1;
 		} else {
 			penalty -= result;
 		}
-		steps--;
+		(*steps)--;
 	}
 	return penalty;
 }

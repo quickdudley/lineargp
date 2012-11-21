@@ -16,6 +16,9 @@ int bitwiseLevenshtein(char *a, size_t asize, char *b, size_t bsize)
 	}
 	int width = asize * 8;
 	int height = bsize * 8;
+	if(width == 0) {
+		return height;
+	}
 	int *m[2];
 
 	for(int i = 0; i < 2; i++) {
@@ -56,7 +59,9 @@ int bytewiseLevenshtein(char *a, size_t asize, char *b, size_t bsize)
 		b = t;
 		bsize = tsize;
 	}
-	int height = bsize * 8;
+	if(asize == 0) {
+		return bsize;
+	}
 	int *m[2];
 
 	for(int i = 0; i < 2; i++) {

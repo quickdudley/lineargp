@@ -42,6 +42,6 @@ typedef struct _environment {
 // negative for penalty, positive to abort (greater than one
 // to both abort and give penalty)
 int vmStep(genome *g, environment *env);
-int vmRun(genome *g, environment *env, long long int steps);
+int vmRun(genome *g, environment *env, long long int *steps);
 
 #endif
