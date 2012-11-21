@@ -113,4 +113,48 @@ static void sort_genome(genome * unsorted, int criterion) {
 	free(fragments);
 }
 
+void delete_genome(genome * scrap)
+{
+	while(scrap->prev != NULL) {
+		scrap = scrap->prev;
+	}
+	while(scrap != NULL) {
+		genome *n = scrap;
+		scrap = scrap->next;
+		free(n);
+	}
+}
 
+genome * random_genome(int size)
+{
+	genome *r = NULL;
+	while(0 < size) {
+		genome *n, *i, *t;
+		n = malloc(sizeof(genome));
+		n->next = NULL;
+		n->prev = NULL;
+		n->first.crossover_position = random() / 2;
+		n->first.execution_position = random() / 2;
+		for(int x = 0; x < sizeof(n->first.instructions); x++) {
+			n->first.instructions[x] = (char)(random() & 0xff);
+		}
+		i = r;
+		while(i != NULL) {
+			if(n->first.crossover_position >= i->first.crossover_position)
+				n->first.crossover_position++;
+			if(n->first.execution_position >= i->first.execution_position)
+				n->first.execution_position++;
+			t = i;
+			i = i->next;
+		}
+		if(r == NULL) {
+			r = n;
+		}
+		else {
+			t->next = n;
+			n->prev = t;
+		}
+		size--;
+	}
+	return r;
+}
