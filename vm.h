@@ -38,14 +38,6 @@ typedef struct _environment {
 	unsigned int pcn;
 } environment;
 
-typedef environment * (*setupEnvironmentFunction)(environment *);
-typedef void (*takedownEnvironmentFunction)(environment *);
-
-typedef struct _environmentTemplate {
-	setupEnvironmentFunction setup;
-	takedownEnvironmentFunction takedown;
-} environmentTemplate;
-
 //return value for vmStep: 0 for neutral,
 // negative for penalty, positive to abort (greater than one
 // to both abort and give penalty)

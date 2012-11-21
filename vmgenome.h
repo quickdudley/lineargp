@@ -13,7 +13,7 @@ typedef struct _genome {
 	struct _genome * prev;
 } genome;
 
-void delete_genome(genome scrap);
+void delete_genome(genome * scrap);
 
 void sort_crossover(genome * unsorted);
 void sort_execute(genome * unsorted);

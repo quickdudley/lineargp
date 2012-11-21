@@ -1,4 +1,4 @@
-OBJECTS = main.o vmgenome.o vm.o
+OBJECTS = main.o vmgenome.o vm.o levenshtein.o
 
 all: vmgenome
 
@@ -6,4 +6,4 @@ vmgenome: $(OBJECTS)
 	gcc -g $(OBJECTS) -o vmgenome
 
 %.o : %.c
-	gcc -g -c $< -o $@
+	gcc -g -std=gnu99 -c $< -o $@

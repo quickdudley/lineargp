@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "vmgenome.h"
 
-void sort_genome(genome * unsorted, int criterion);
+static void sort_genome(genome * unsorted, int criterion);
 
 typedef struct _genome_list {
 	genome * data;
@@ -18,7 +18,7 @@ void sort_execute(genome * unsorted) {
 }
 
 /* Bottom up merge sort */
-void sort_genome(genome * unsorted, int criterion) {
+static void sort_genome(genome * unsorted, int criterion) {
 	genome * tail;
 	genome_list * fragments;
 	genome * fin;
