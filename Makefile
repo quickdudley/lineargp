@@ -1,4 +1,4 @@
-OBJECTS = main.o vmgenome.o vm.o levenshtein.o
+OBJECTS = main.o vmgenome.o vm.o levenshtein.o pareto.o
 
 all: vmgenome
 
