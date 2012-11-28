@@ -1,7 +1,9 @@
 #include <limits.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "vm.h"
+#include "levenshtein.h"
 
 int * getMem(heapPage ** m, int address) {
 	int block = address / 1024;
@@ -68,6 +70,7 @@ int vmStep(genome *g, environment *env) {
 	unsigned char instruction;
 	unsigned char h, l;
 	instruction = vmFetch(&g, &(env->pc));
+	env->pcn = env->pc + 1;
 	h = instruction & 0xF0;
 	l = instruction & 0x0F;
 	if(h == 0) {
@@ -198,16 +201,109 @@ int vmStep(genome *g, environment *env) {
 
 int vmRun(genome *g, environment *env, long long int *steps){
 	int penalty;
-	while(*steps > 0) {
+	int s = *steps;
+	sort_execute(g);
+	while(s > 0) {
 		int result = vmStep(g, env);
+		env->pc = env->pcn;
 		if(result > 0) {
-			*steps = 0;
+			s = 0;
 			penalty += result - 1;
 		} else {
 			penalty -= result;
 		}
-		(*steps)--;
+		s--;
+		*steps = s;
 	}
 	return penalty;
 }
 
+void init_environment(environment *env)
+{
+	memset(env, 0, sizeof(environment));
+	env->heap = malloc(sizeof(heapPage));
+	memset(env->heap, 0, sizeof(heapPage));
+}
+
+int delete_heap(heapPage *heap)
+{
+	while(heap->prev != NULL)
+		heap = heap->prev;
+	int r = 0;
+	heapPage* n;
+	while(heap != NULL) {
+		n = heap->next;
+		free(heap);
+		heap = n;
+		r++;
+	}
+}
+
+struct buffercontext {
+	char *buffer;
+	int length;
+	int pos;
+};
+
+static int bufferInput(void *context)
+{
+	if(((struct buffercontext*)context)->pos >= ((struct buffercontext*)context)->length)
+		return -1;
+	int r = ((struct buffercontext*)context)->buffer[((struct buffercontext*)context)->pos];
+	((struct buffercontext*)context)->pos++;
+	return r;
+}
+
+static int bufferOutput(void *context, int value)
+{
+	if(value & (~0xff))
+		return 1;
+	((struct buffercontext*)context)->buffer[((struct buffercontext*)context)->pos] = (char)value;
+	((struct buffercontext*)context)->pos++;
+	return ((struct buffercontext*)context)->pos == ((struct buffercontext*)context)->length;
+}
+
+void eval_run(genome *g, evalset *eval)
+{
+	if(g == eval->last_genome)
+		return;
+	eval->last_genome = g;
+	environment env;
+	struct buffercontext inputbuffer;
+	struct buffercontext outputbuffer;
+	init_environment(&env);
+	inputbuffer.pos = 0;
+	inputbuffer.length = eval->input_len;
+	inputbuffer.buffer = eval->input;
+	outputbuffer.pos = 0;
+	outputbuffer.length = (int)(eval->target_len * 1.75) + 1;
+	outputbuffer.buffer = malloc(outputbuffer.length);
+	env.ii[0].source = bufferInput;
+	env.ii[0].context = &inputbuffer;
+	env.oo[0].sink = bufferOutput;
+	env.oo[0].context = &outputbuffer;
+	eval->steps = 200000;
+	vmRun(g, &env, &(eval->steps));
+	eval->steps = 200000 - eval->steps;
+	eval->heap_pages = delete_heap(env.heap);
+	eval->difference = bitwiseLevenshtein(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
+	free(outputbuffer.buffer);
+}
+
+int eval_error(genome *g, evalset *eval)
+{
+	eval_run(g, eval);
+	return eval->difference;
+}
+
+int eval_runtime(genome *g, evalset *eval)
+{
+	eval_run(g, eval);
+	return eval->steps;
+}
+
+int eval_memory(genome *g, evalset *eval)
+{
+	eval_run(g, eval);
+	return eval->heap_pages;
+}

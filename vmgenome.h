@@ -15,6 +15,9 @@ typedef struct _genome {
 
 void delete_genome(genome * scrap);
 
+int genome_size(genome * s);
+int eval_genome_size(genome *s, void *unused);
+
 void sort_crossover(genome * unsorted);
 void sort_execute(genome * unsorted);
 

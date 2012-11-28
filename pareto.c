@@ -1,5 +1,7 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include "vmgenome.h"
+#include "vm.h"
 #include "pareto.h"
 
 void delete_genepool(genepool *scrap)
@@ -63,5 +65,102 @@ genepool* pareto_front(genepool *original, genepool **remainder)
 		}
 	}
 	free(original);
+	return r;
+}
+
+genepool* concat_genepool(genepool *a, genepool *b)
+{
+	a = realloc(a, sizeof(genepool) + (a->num_candidates + b->num_candidates) * sizeof(candidate));
+	for(int i = a->num_candidates, j = 0; j < b->num_candidates; i++, j++) {
+		a->candidates[i] = b->candidates[j];
+	}
+	a->num_candidates += b->num_candidates;
+	free(b);
+	return a;
+}
+
+void evaluate_pool(genepool *pool, eval_closure* crit, int num_criteria)
+{
+	pool->num_criteria = num_criteria;
+	for(int i = 0; i < pool->num_candidates; i++) {
+		if(pool->candidates[i].evaluations != NULL) {
+			free(pool->candidates[i].evaluations);
+		}
+		// first element in evaluation array is age.
+		pool->candidates[i].evaluations = malloc(sizeof(int) * num_criteria + 1);
+		pool->candidates[i].evaluations[0] = 0;
+		for(int r = 0; r < num_criteria; r++) {
+			pool->candidates[i].evaluations[r + 1] = crit[r].func(pool->candidates[i].genome, crit[r].context);
+		}
+	}
+}
+
+genepool* initial_genepool(int size)
+{
+	genepool *ret = malloc(sizeof(genepool) + sizeof(candidate) * size);
+	ret->num_candidates = size;
+	for(int i = 0; i < size; i++) {
+		ret->candidates[i].evaluations = NULL;
+		ret->candidates[i].genome = random_genome(16);
+	}
+	return ret;
+}
+
+genepool* spawn_genepool(genepool* parents, int size)
+{
+	genepool *ret = malloc(sizeof(genepool) + sizeof(candidate) * size);
+	ret->num_candidates = size;
+	for(int i = 0; i < size; i++) {
+		ret->candidates[i].evaluations = NULL;
+		genome *p[2];
+		for(int j = 0; j < 2; j++) {
+			p[j] = parents->candidates[random() % parents->num_candidates].genome;
+		}
+		ret->candidates[i].genome = crossover_genome(p[0], p[1]);
+		mutate_genome(ret->candidates[i].genome);
+	}
+	return ret;
+}
+
+void pool_age(genepool *pool)
+{
+	for(int i = 0; i < pool->num_candidates; i++) {
+		pool->candidates[i].evaluations[0]++;
+	}
+}
+
+static inline genome* readystop(genepool *pool, int *stop)
+{
+	for(int i = 0; i < pool->num_candidates; i++) {
+		int a = 1;
+		for(int j = 0; j < pool->num_criteria; j++) {
+			if(pool->candidates[i].evaluations[j] > stop[j]) {
+				a = 0;
+				break;
+			}
+		}
+		if(a == 1) {
+			return pool->candidates[i].genome;
+		}
+	}
+	return NULL;
+}
+
+genome* selection_loop(eval_closure* crit, int num_criteria, int *stop)
+{
+	int gc = 0;
+	genome *r = NULL;
+	genepool *m = initial_genepool(64);
+	evaluate_pool(m, crit, num_criteria);
+	while((r = readystop(m, stop)) != NULL) {
+		genepool *n = NULL, *x = NULL;
+		m = pareto_front(m, &x);
+		pool_age(m);
+		printf("Generation %d: %d individuals\n", gc++, m->num_candidates);
+		delete_genepool(x);
+		n = spawn_genepool(m, 24);
+		evaluate_pool(n, crit, num_criteria);
+		m = concat_genepool(m, n);
+	}
 	return r;
 }

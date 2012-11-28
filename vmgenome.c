@@ -186,6 +186,8 @@ genome * copy_genome(genome *original)
 
 void mutate_genome(genome *x)
 {
+	while(x->prev != NULL)
+		x = x->prev;
 	genome *t = x;
 	while(t != NULL) {
 		if(random() < MUTATION_THRESHOLD) {
@@ -215,3 +217,75 @@ void mutate_genome(genome *x)
 	}
 }
 
+genome * crossover_genome(genome *parent1, genome *parent2)
+{
+	sort_crossover(parent1);
+	sort_crossover(parent2);
+	while(parent1->prev != NULL)
+		parent1 = parent1->prev;
+	while(parent2->prev != NULL)
+		parent2 = parent2->prev;
+	genome *ret = NULL;
+	genome *rt = NULL;
+	while(ret == NULL) {
+		genome *s1 = parent1;
+		genome *s2 = parent2;
+		while(s1 != NULL || s2 != NULL) {
+			if(s2 == NULL || s1->first.crossover_position < s2->first.crossover_position) {
+				if(random() ^ 1) {
+					genome *n = malloc(sizeof(genome));
+					if(rt != NULL)
+						rt->next = n;
+					n->prev = rt;
+					n->first = s1->first;
+					rt = n;
+					if(ret == NULL)
+						ret = n;
+				}
+				s1 = s1->next;
+			}
+			else if(s1 == NULL || s2->first.crossover_position < s1->first.crossover_position) {
+				if(random() ^ 1) {
+					genome *n = malloc(sizeof(genome));
+					if(rt != NULL)
+						rt->next = n;
+					n->prev = rt;
+					n->first = s2->first;
+					rt = n;
+					if(ret == NULL)
+						ret = n;
+				}
+				s2 = s2->next;
+			} else {
+				genome *n = malloc(sizeof(genome));
+				if(rt != NULL)
+					rt->next = n;
+				n->prev = rt;
+				n->first = random() ^ 1 ? s2->first : s1->first;
+				rt = n;
+				if(ret == NULL)
+					ret = n;
+				s1 = s1->next;
+				s2 = s2->next;
+			}
+		}
+	}
+	return ret;
+}
+
+int genome_size(genome * s)
+{
+	int count = 0;
+	while (s->prev != NULL)
+		s = s->prev;
+	while (s != NULL) {
+		count++;
+		s = s->next;
+	}
+	return count;
+}
+
+int eval_genome_size(genome *s, void *unused)
+{
+	return genome_size(s);
+}
