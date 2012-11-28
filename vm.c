@@ -5,7 +5,7 @@
 #include "vm.h"
 #include "levenshtein.h"
 
-int * getMem(heapPage ** m, int address) {
+int * getMem(heapPage ** m, unsigned int address) {
 	int block = address / 1024;
 	int offset = address % 1024;
 	while((*m)->prev != NULL && (*m)->prev->base >= block) {
@@ -16,18 +16,21 @@ int * getMem(heapPage ** m, int address) {
 	}
 	if((*m)->prev == NULL && (*m)->base > block) {
 		(*m)->prev = (heapPage *)malloc(sizeof(heapPage));
+		memset((*m)->prev, 0, sizeof(heapPage));
 		(*m)->prev->next = (*m);
 		(*m)->prev->base = block;
 		(*m)->prev->prev = NULL;
 		(*m) = (*m)->prev;
 	} else if((*m)->next == NULL && (*m)->base < block) {
 		(*m)->next = (heapPage *)malloc(sizeof(heapPage));
+		memset((*m)->next, 0, sizeof(heapPage));
 		(*m)->next->prev = (*m);
 		(*m)->next->base = block;
 		(*m)->next->next = NULL;
 		(*m) = (*m)->next;
 	} else if((*m)->base > block) {
 		heapPage * n = (heapPage *)malloc(sizeof(heapPage));
+		memset(n, 0, sizeof(heapPage));
 		n->base = block;
 		n->next = *m;
 		n->prev = (*m)->prev;
@@ -36,6 +39,7 @@ int * getMem(heapPage ** m, int address) {
 		(*m) = n;
 	} else if((*m)->base < block) {
 		heapPage * n = (heapPage *)malloc(sizeof(heapPage));
+		memset(n, 0, sizeof(heapPage));
 		n->base = block;
 		n->prev = *m;
 		n->next = (*m)->next;
@@ -43,7 +47,7 @@ int * getMem(heapPage ** m, int address) {
 		(*m)->next = n;
 		(*m) = n;
 	}
-	return (*m)->data + offset;
+	return &((*m)->data[offset]);
 }
 
 unsigned char vmFetch(genome **g, unsigned int *pc) {
@@ -54,8 +58,11 @@ unsigned char vmFetch(genome **g, unsigned int *pc) {
 	while((*g)->next != NULL && (*g)->next->first.execution_position <= block) {
 		*g = (*g)->next;
 	}
+	while((*g)->prev != NULL && (*g)->prev->first.execution_position == block) {
+		*g = (*g)->prev;
+	}
 	if((*g)->first.execution_position > block) {
-		*pc = block * 16;
+		*pc = (*g)->first.execution_position * 16;
 		return (*g)->first.instructions[0];
 	} else if((*g)->first.execution_position < block) {
 		*pc = UINT_MAX;
@@ -66,10 +73,10 @@ unsigned char vmFetch(genome **g, unsigned int *pc) {
 	}
 }
 
-int vmStep(genome *g, environment *env) {
+int vmStep(genome **g, environment *env) {
 	unsigned char instruction;
 	unsigned char h, l;
-	instruction = vmFetch(&g, &(env->pc));
+	instruction = vmFetch(g, &(env->pc));
 	env->pcn = env->pc + 1;
 	h = instruction & 0xF0;
 	l = instruction & 0x0F;
@@ -136,7 +143,7 @@ int vmStep(genome *g, environment *env) {
 	else if(h == 0xD0) {
 		if(env->oo[env->fd].sink != NULL) {
 			if(!env->oo[env->fd].closed) {
-				int rv = env->oo[env->fd].sink(env->oo[l].context, env->rgs[l]);
+				int rv = env->oo[env->fd].sink(env->oo[env->fd].context, env->rgs[l]);
 				if(env->rgs[l] == -1) {
 					env->oo[env->fd].closed = 1;
 				}
@@ -161,10 +168,22 @@ int vmStep(genome *g, environment *env) {
 			env->rgs[env->s1] = env->rgs[env->s1] * env->rgs[env->s2];
 			break;
 		case 0x3:
-			env->rgs[env->s1] = env->rgs[env->s1] / env->rgs[env->s2];
+			if(env->rgs[env->s2] == 0) {
+				env->rgs[env->s1] = 0;
+				return -1;
+			}
+			else {
+				env->rgs[env->s1] = env->rgs[env->s1] / env->rgs[env->s2];
+			}
 			break;
 		case 0x4:
-			env->rgs[env->s1] = env->rgs[env->s1] % env->rgs[env->s2];
+			if(env->rgs[env->s2] == 0) {
+				env->rgs[env->s1] = 0;
+				return -1;
+			}
+			else {
+				env->rgs[env->s1] = env->rgs[env->s1] % env->rgs[env->s2];
+			}
 			break;
 		case 0x5:
 			env->rgs[env->s1] = ~(env->rgs[env->s2]);
@@ -204,7 +223,7 @@ int vmRun(genome *g, environment *env, long long int *steps){
 	int s = *steps;
 	sort_execute(g);
 	while(s > 0) {
-		int result = vmStep(g, env);
+		int result = vmStep(&g, env);
 		env->pc = env->pcn;
 		if(result > 0) {
 			s = 0;
@@ -213,8 +232,8 @@ int vmRun(genome *g, environment *env, long long int *steps){
 			penalty -= result;
 		}
 		s--;
-		*steps = s;
 	}
+	*steps -= s;
 	return penalty;
 }
 
@@ -284,7 +303,6 @@ void eval_run(genome *g, evalset *eval)
 	env.oo[0].context = &outputbuffer;
 	eval->steps = 200000;
 	vmRun(g, &env, &(eval->steps));
-	eval->steps = 200000 - eval->steps;
 	eval->heap_pages = delete_heap(env.heap);
 	eval->difference = bitwiseLevenshtein(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
 	free(outputbuffer.buffer);

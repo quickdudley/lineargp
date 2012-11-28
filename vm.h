@@ -44,7 +44,7 @@ int delete_heap(heapPage *heap);
 //return value for vmStep: 0 for neutral,
 // negative for penalty, positive to abort (greater than one
 // to both abort and give penalty)
-int vmStep(genome *g, environment *env);
+int vmStep(genome **g, environment *env);
 int vmRun(genome *g, environment *env, long long int *steps);
 
 typedef struct _evalset {

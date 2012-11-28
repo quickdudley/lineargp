@@ -1,16 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include "vmgenome.h"
 
 #define MUTATION_THRESHOLD (RAND_MAX * 0.05)
 
 static void sort_genome(genome * unsorted, int criterion);
-
-typedef struct _genome_list {
-	genome * data;
-	struct _genome_list * next;
-} genome_list;
 
 void sort_crossover(genome * unsorted) {
 	sort_genome(unsorted, 0);
@@ -21,99 +17,57 @@ void sort_execute(genome * unsorted) {
 }
 
 /* Bottom up merge sort */
-static void sort_genome(genome * unsorted, int criterion) {
-	genome * tail;
-	genome_list * fragments;
-	genome * fin;
+static void sort_genome(genome * unsorted, int criterion)
+{
 	if (criterion != 1 && criterion != 0) {
 		return;
 	}
-	fin = malloc(sizeof(genome)); // copy the first node to prevent making a circular list when returning
-	*fin = *unsorted;
-	tail = unsorted->next;
-	tail->prev = fin;
-	unsorted->next = NULL;
-	tail->prev = NULL;
-	fragments = malloc(sizeof(genome_list));
-	fragments->data = fin;
-	fragments->next = NULL;
+	while(unsorted->prev != NULL)
+		unsorted = unsorted->prev;
+	int len = genome_size(unsorted);
+	genome **gl = malloc(sizeof(genome *) * len);
+	genome *current = unsorted;
 	/* Break genome into list of single gene genomes */
-	while(tail != NULL) {
-		genome_list * old_fragments;
-		fragments->data->next = NULL;
-		fragments->data->prev = NULL;
-		old_fragments = fragments;
-		fragments = malloc(sizeof(genome_list));
-		fragments->data = tail;
-		fragments->next = old_fragments;
-		tail = tail->next;
+	for(int i = 0; i < len; i++) {
+		gl[i] = current;
+		current = current->next;
+		gl[i]->next = NULL;
+		gl[i]->prev = NULL;
 	}
 	/* Iterate until only one genome remains */
-	while(fragments->next != NULL) {
-		genome_list * iter = fragments;
-		genome_list * del;
-		/* Merge every second genome */
-		while(iter != NULL) {
-			genome * a;
-			a = iter->data;
-			if(iter->next != NULL) {
-				genome * b;
-				genome * r;
-				genome * t;
-				t = NULL;
-				b = iter->next->data;
-				/* It makes for slightly shorter code to have a blank gene at the start and delete it when finished */
-				r = malloc(sizeof(genome));
-				t = r;
-				while(a != NULL && b != NULL) {
-					t->next = malloc(sizeof(genome));
-					t->next->prev = t;
-					t = t->next;
-					if((criterion == 0 && (a->first.crossover_position <= b->first.crossover_position)) ||
-					   (criterion == 1 && (a->first.execution_position <= b->first.execution_position))) {
-						t->first = a->first;
-						if(a->next != NULL) {
-							a = a->next;
-							free(a->prev);
-						} else {
-							free(a);
-							a = NULL;
-						}
-					} else {
-						t->first = b->first;
-						if(b->next != NULL) {
-							b = b->next;
-							free(b->prev);
-						} else {
-							free(b);
-							b = NULL;
-						}
-					}
+	while(len != 1) {
+		int nl = len / 2 + (len & 1);
+		genome **ngl = malloc(sizeof(genome *) * nl);
+		if(len & 1) {
+			ngl[len / 2] = gl[len - 1];
+		}
+		for(int i = 0; i < (len & ~1); i += 2) {
+			genome *a = gl[i], *b = gl[i + 1];
+			genome *n = NULL;
+			while(a != NULL || b != NULL) {
+				genome *t = a == NULL ? b : (b == NULL ? a :
+						(criterion == 0 ?
+						(a->first.crossover_position <= b->first.crossover_position ? a : b) :
+						(a->first.execution_position <= b->first.execution_position ? a : b)));
+				if(t == a)
+					a = a->next;
+				else
+					b = b->next;
+				if(n != NULL) {
+					n->next = t;
+					t->prev = n;
 				}
-				if(a != NULL) {
-					a->prev = t;
-					t->next = a;
-				} else if (b != NULL) {
-					b->prev = t;
-					t->next = b;
+				else {
+					ngl[i / 2] = t;
 				}
-				t = r->next;
-				free(r);
-				t->prev = NULL;
-				iter->data = t;
-				del = iter->next;
-				iter->next = del->next;
-				free(del);
-				iter = iter->next;
-			} else {
-				iter = NULL;
+				n = t;
 			}
 		}
+		free(gl);
+		gl = ngl;
+		len = nl;
 	}
-	*unsorted = *(fragments->data);
-	unsorted->next->prev = unsorted;
-	free(fragments->data);
-	free(fragments);
+	free(gl);
 }
 
 void delete_genome(genome * scrap)
@@ -169,6 +123,8 @@ genome * copy_genome(genome *original)
 	genome *n, *t, *i;
 	n = NULL;
 	t = NULL;
+	while(original->prev != NULL)
+		original = original->prev;
 	while(original != NULL) {
 		i = malloc(sizeof(genome));
 		if(n == NULL)
@@ -197,6 +153,7 @@ void mutate_genome(genome *x)
 				if(c != t && t->first.crossover_position >= c->first.crossover_position) {
 					t->first.crossover_position++;
 				}
+				c = c->next;
 			}
 		}
 		if(random() < MUTATION_THRESHOLD) {
@@ -206,6 +163,7 @@ void mutate_genome(genome *x)
 				if(c != t && t->first.execution_position >= c->first.execution_position) {
 					t->first.execution_position++;
 				}
+				c = c->next;
 			}
 		}
 		for(int i = 0; i < sizeof(t->first.instructions); i++) {
@@ -231,9 +189,12 @@ genome * crossover_genome(genome *parent1, genome *parent2)
 		genome *s1 = parent1;
 		genome *s2 = parent2;
 		while(s1 != NULL || s2 != NULL) {
-			if(s2 == NULL || s1->first.crossover_position < s2->first.crossover_position) {
-				if(random() ^ 1) {
+			int pp1 = s1 == NULL ? INT_MAX : s1->first.crossover_position;
+			int pp2 = s2 == NULL ? INT_MAX : s2->first.crossover_position;
+			if(s2 == NULL || pp1 < pp2) {
+				if(random() & 1) {
 					genome *n = malloc(sizeof(genome));
+					n->next = NULL;
 					if(rt != NULL)
 						rt->next = n;
 					n->prev = rt;
@@ -244,9 +205,10 @@ genome * crossover_genome(genome *parent1, genome *parent2)
 				}
 				s1 = s1->next;
 			}
-			else if(s1 == NULL || s2->first.crossover_position < s1->first.crossover_position) {
-				if(random() ^ 1) {
+			else if(s1 == NULL || pp2 < pp1) {
+				if(random() & 1) {
 					genome *n = malloc(sizeof(genome));
+					n->next = NULL;
 					if(rt != NULL)
 						rt->next = n;
 					n->prev = rt;
@@ -258,10 +220,11 @@ genome * crossover_genome(genome *parent1, genome *parent2)
 				s2 = s2->next;
 			} else {
 				genome *n = malloc(sizeof(genome));
+				n->next = NULL;
 				if(rt != NULL)
 					rt->next = n;
 				n->prev = rt;
-				n->first = random() ^ 1 ? s2->first : s1->first;
+				n->first = random() & 1 ? s2->first : s1->first;
 				rt = n;
 				if(ret == NULL)
 					ret = n;

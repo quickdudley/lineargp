@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 #include "vmgenome.h"
 #include "vm.h"
 #include "pareto.h"
@@ -39,7 +40,7 @@ genepool* pareto_front(genepool *original, genepool **remainder)
 					eq = 0;
 				}
 			}
-			original->candidates[i].dominated = td || !eq;
+			original->candidates[i].dominated = td && !eq;
 		}
 		if(original->candidates[i].dominated) {
 			dc++;
@@ -131,7 +132,12 @@ void pool_age(genepool *pool)
 
 static inline genome* readystop(genepool *pool, int *stop)
 {
+	static int minerror = INT_MAX;
 	for(int i = 0; i < pool->num_candidates; i++) {
+		if(pool->candidates[i].evaluations[2] < minerror) {
+			minerror = pool->candidates[i].evaluations[2];
+			printf("\nNew minimum error: %d\n", minerror);
+		}
 		int a = 1;
 		for(int j = 0; j < pool->num_criteria; j++) {
 			if(pool->candidates[i].evaluations[j] > stop[j]) {
@@ -152,13 +158,13 @@ genome* selection_loop(eval_closure* crit, int num_criteria, int *stop)
 	genome *r = NULL;
 	genepool *m = initial_genepool(64);
 	evaluate_pool(m, crit, num_criteria);
-	while((r = readystop(m, stop)) != NULL) {
+	while((r = readystop(m, stop)) == NULL) {
 		genepool *n = NULL, *x = NULL;
 		m = pareto_front(m, &x);
 		pool_age(m);
-		printf("Generation %d: %d individuals\n", gc++, m->num_candidates);
+		printf("Generation %d: %d individuals\r", gc++, m->num_candidates);
+		n = spawn_genepool(m, 24); //originally I deleted the old one first, but that caused problems for memoization.
 		delete_genepool(x);
-		n = spawn_genepool(m, 24);
 		evaluate_pool(n, crit, num_criteria);
 		m = concat_genepool(m, n);
 	}

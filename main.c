@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <limits.h>
 
 #include "vmgenome.h"
 #include "vm.h"
@@ -9,7 +10,7 @@ int main(int argc, char ** args)
 	evalset eval;
 	eval_closure crit[4];
 	genome *r;
-	int stop[] = {200, 0, 30, 200};
+	int stop[] = {200, 0, INT_MAX, INT_MAX};
 	crit[0].func = eval_genome_size;
 	crit[1].func = (eval_func)eval_error;
 	crit[2].func = (eval_func)eval_memory;
