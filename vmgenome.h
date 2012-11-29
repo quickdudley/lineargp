@@ -25,5 +25,6 @@ genome * random_genome(int size);
 genome * copy_genome(genome *original);
 void mutate_genome(genome *x);
 genome * crossover_genome(genome *parent1, genome *parent2);
+int genome_compare(genome *a, genome *b);
 
 #endif

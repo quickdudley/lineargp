@@ -30,7 +30,6 @@ typedef struct _environment {
 	output oo[16];
 	heapPage *heap;
 	int rgs[0x10];
-	int cb;
 	int s1;
 	int s2;
 	int fd;
@@ -52,6 +51,7 @@ typedef struct _evalset {
 	int heap_pages;
 	long long int steps;
 	int difference;
+	int cdifference;
 	char *target;
 	int target_len;
 	char *input;
@@ -60,6 +60,7 @@ typedef struct _evalset {
 
 void eval_run(genome *g, evalset *eval);
 int eval_error(genome *g, evalset *eval);
+int eval_cerror(genome*g, evalset *eval);
 int eval_runtime(genome *g, evalset *eval);
 int eval_memory(genome *g, evalset *eval);
 

@@ -4,7 +4,7 @@
 #include <limits.h>
 #include "vmgenome.h"
 
-#define MUTATION_THRESHOLD (RAND_MAX * 0.05)
+#define MUTATION_THRESHOLD (RAND_MAX / 17)
 
 static void sort_genome(genome * unsorted, int criterion);
 
@@ -166,12 +166,40 @@ void mutate_genome(genome *x)
 				c = c->next;
 			}
 		}
+		if(random() < MUTATION_THRESHOLD) {
+			if(random() & 1) {
+				for(int i = 0; i < (sizeof(t->first.instructions) - 1); i++) {
+					t->first.instructions[i] = t->first.instructions[i + 1];
+				}
+				t->first.instructions[sizeof(t->first.instructions) - 1] = (char)(random() & 0xFF);
+			}
+			else {
+				for(int i = sizeof(t->first.instructions) - 1; i > 0; i--) {
+					t->first.instructions[i] = t->first.instructions[i - 1];
+				}
+				t->first.instructions[0] = (char)(random() & 0xFF);
+			}
+		}
 		for(int i = 0; i < sizeof(t->first.instructions); i++) {
 			if(random() < MUTATION_THRESHOLD) {
 				t->first.instructions[i] = (char)(random() & 0xFF);
 			}
 		}
 		t = t->next;
+	}
+	// Mutation to add one random gene: mutation to remove one doesn't seem necessary
+	// because the crossover operator can remove or duplicate genes.
+	if(random() < MUTATION_THRESHOLD && random() < MUTATION_THRESHOLD) {
+		t = random_genome(1);
+		t->next = x;
+		x->prev = t;
+		while(x != NULL) {
+			if(t->first.execution_position >= x->first.execution_position)
+				t->first.execution_position++;
+			if(t->first.crossover_position >= x->first.crossover_position)
+				t->first.crossover_position++;
+			x = x->next;
+		}
 	}
 }
 
@@ -225,6 +253,13 @@ genome * crossover_genome(genome *parent1, genome *parent2)
 					rt->next = n;
 				n->prev = rt;
 				n->first = random() & 1 ? s2->first : s1->first;
+				if(random() & 1) {
+					for(int i = 0; i < sizeof(n->first.instructions); i++) {
+						n->first.instructions[i] = random() & 1 ?
+								s2->first.instructions[i] :
+								s1->first.instructions[i];
+					}
+				}
 				rt = n;
 				if(ret == NULL)
 					ret = n;
@@ -251,4 +286,30 @@ int genome_size(genome * s)
 int eval_genome_size(genome *s, void *unused)
 {
 	return genome_size(s);
+}
+
+int genome_compare(genome *a, genome *b)
+{
+	int r = 0;
+	int s = genome_size(a);
+	sort_execute(a);
+	sort_execute(b);
+	while(a->prev != NULL)
+		a = a->prev;
+	while(b->prev != NULL)
+		b = b->prev;
+	while(a != NULL && b != NULL) {
+		if(a->first.execution_position < b->first.execution_position) {
+			a = a->next;
+		}
+		else if(b->first.execution_position < a->first.execution_position) {
+			b = b->next;
+		}
+		else {
+			r +=actualLevenshtein(a->first.instructions, sizeof(a->first.instructions), b->first.instructions, sizeof(b->first.instructions));
+			a = a->next;
+			b = b->next;
+		}
+	}
+	return r * 100 / s;
 }

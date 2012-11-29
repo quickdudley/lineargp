@@ -65,7 +65,7 @@ unsigned char vmFetch(genome **g, unsigned int *pc) {
 		*pc = (*g)->first.execution_position * 16;
 		return (*g)->first.instructions[0];
 	} else if((*g)->first.execution_position < block) {
-		*pc = UINT_MAX;
+		*pc = UINT_MAX - 1;
 		return 0x0F; // halt
 	} else {
 		int x = *pc % 16;
@@ -87,8 +87,8 @@ int vmStep(genome **g, environment *env) {
 		return 0;
 	}
 	else if(h == 0x10) {
-		env->cb <<= 4;
-		env->cb |= l;
+		env->rgs[env->s1] <<= 4;
+		env->rgs[env->s1] |= l;
 		return 0;
 	}
 	else if(h == 0x20) {
@@ -100,8 +100,7 @@ int vmStep(genome **g, environment *env) {
 		return 0;
 	}
 	else if(h == 0x40) {
-		env->rgs[l] = env->cb;
-		env->cb = 0;
+		env->rgs[l] = 0;
 		return 0;
 	}
 	else if(h == 0x50) {
@@ -120,7 +119,6 @@ int vmStep(genome **g, environment *env) {
 			  || (h == 0xA0 && env->rgs[env->s1] == env->rgs[env->s2])) {
 		env->rgs[0x0F] = env->pcn;
 		env->pcn = env->rgs[l];
-		env->cb = 0;
 		return 0;
 	}
 	else if(h == 0xB0) {
@@ -226,6 +224,7 @@ int vmRun(genome *g, environment *env, long long int *steps){
 		int result = vmStep(&g, env);
 		env->pc = env->pcn;
 		if(result > 0) {
+			*steps -= s;
 			s = 0;
 			penalty += result - 1;
 		} else {
@@ -233,7 +232,6 @@ int vmRun(genome *g, environment *env, long long int *steps){
 		}
 		s--;
 	}
-	*steps -= s;
 	return penalty;
 }
 
@@ -305,6 +303,7 @@ void eval_run(genome *g, evalset *eval)
 	vmRun(g, &env, &(eval->steps));
 	eval->heap_pages = delete_heap(env.heap);
 	eval->difference = bitwiseLevenshtein(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
+	eval->cdifference = bytewiseLevenshtein(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
 	free(outputbuffer.buffer);
 }
 
@@ -312,6 +311,13 @@ int eval_error(genome *g, evalset *eval)
 {
 	eval_run(g, eval);
 	return eval->difference;
+}
+
+int eval_cerror(genome*g, evalset *eval)
+{
+	eval_run(g, eval);
+	if(eval->cdifference == 16)
+	return eval->cdifference;
 }
 
 int eval_runtime(genome *g, evalset *eval)

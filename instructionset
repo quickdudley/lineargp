@@ -16,10 +16,10 @@ cb = 0
 
 0F halt
 0_ no-op
-1x cb = cb << 4 | x
+1x s1 = s1 << 4 | x
 2x make s1 point to rx
 3x make s2 point to rx
-4x rx = cb; cb = 0
+4x rx = 0
 5x rx = mem[s1]
 6x mem[s2] = rx
 7x rx = s1
