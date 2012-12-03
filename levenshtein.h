@@ -4,6 +4,6 @@
 
 extern int bitwiseLevenshtein(char *a, size_t asize, char *b, size_t bsize);
 extern int bytewiseLevenshtein(char *a, size_t asize, char *b, size_t bsize);
-extern int actualLevenshtein(char *a, size_t asize, char *b, size_t bsize);
+extern int errorfreeprogress(char *a, size_t asize, char *b, size_t bsize);
 
 #endif

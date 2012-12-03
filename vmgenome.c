@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <unistd.h>
 #include "vmgenome.h"
+#include "levenshtein.h"
 
 #define MUTATION_THRESHOLD (RAND_MAX / 17)
 
@@ -46,7 +48,7 @@ static void sort_genome(genome * unsorted, int criterion)
 			genome *n = NULL;
 			while(a != NULL || b != NULL) {
 				genome *t = a == NULL ? b : (b == NULL ? a :
-						(criterion == 0 ?
+						(criterion == 0 || a->first.execution_position == b->first.execution_position ?
 						(a->first.crossover_position <= b->first.crossover_position ? a : b) :
 						(a->first.execution_position <= b->first.execution_position ? a : b)));
 				if(t == a)
@@ -167,17 +169,13 @@ void mutate_genome(genome *x)
 			}
 		}
 		if(random() < MUTATION_THRESHOLD) {
-			if(random() & 1) {
-				for(int i = 0; i < (sizeof(t->first.instructions) - 1); i++) {
-					t->first.instructions[i] = t->first.instructions[i + 1];
-				}
-				t->first.instructions[sizeof(t->first.instructions) - 1] = (char)(random() & 0xFF);
+			char tmp[sizeof(t->first.instructions)];
+			int rs = random() & 0xFF;
+			for(int i = 0; i < sizeof(tmp); i++) {
+				tmp[(i + rs) % sizeof(tmp)] = t->first.instructions[i];
 			}
-			else {
-				for(int i = sizeof(t->first.instructions) - 1; i > 0; i--) {
-					t->first.instructions[i] = t->first.instructions[i - 1];
-				}
-				t->first.instructions[0] = (char)(random() & 0xFF);
+			for(int i = 0; i < sizeof(tmp); i++) {
+				t->first.instructions[i] = tmp[i];
 			}
 		}
 		for(int i = 0; i < sizeof(t->first.instructions); i++) {
@@ -211,6 +209,9 @@ genome * crossover_genome(genome *parent1, genome *parent2)
 		parent1 = parent1->prev;
 	while(parent2->prev != NULL)
 		parent2 = parent2->prev;
+	if(parent1 == parent2) {
+		return copy_genome(parent1);
+	}
 	genome *ret = NULL;
 	genome *rt = NULL;
 	while(ret == NULL) {
@@ -288,28 +289,95 @@ int eval_genome_size(genome *s, void *unused)
 	return genome_size(s);
 }
 
+static inline int isqrt(int o)
+{
+	int r = 0;
+	for(long long int i = 1 << 30; i != 0; i = i >> 1) {
+		long long int n = r | i;
+		if(n * n <= o)
+			r = n;
+	}
+	return r;
+}
+
 int genome_compare(genome *a, genome *b)
 {
 	int r = 0;
 	int s = genome_size(a);
-	sort_execute(a);
-	sort_execute(b);
+	while(a->prev != NULL)
+		a = a->prev;
+	while(b->prev != NULL)
+		b = b->prev;
+	for(genome* a1 = a; a1 != NULL; a1 = a1->next) {
+		int mx = 0;
+		for(genome *b1 = b; b1 != NULL; b1 = b1->next) {
+			int x = sizeof(a->first.instructions) -
+					bytewiseLevenshtein(a1->first.instructions, sizeof(a->first.instructions),
+							b1->first.instructions, sizeof(b->first.instructions));
+			if(x > mx)
+				mx = x;
+		}
+		r += mx;
+	}
+	return r * 1000 / s;
+}
+
+int genome_equal(genome *a, genome *b) {
+	sort_crossover(a);
+	sort_crossover(b);
 	while(a->prev != NULL)
 		a = a->prev;
 	while(b->prev != NULL)
 		b = b->prev;
 	while(a != NULL && b != NULL) {
-		if(a->first.execution_position < b->first.execution_position) {
-			a = a->next;
-		}
-		else if(b->first.execution_position < a->first.execution_position) {
-			b = b->next;
-		}
-		else {
-			r +=actualLevenshtein(a->first.instructions, sizeof(a->first.instructions), b->first.instructions, sizeof(b->first.instructions));
-			a = a->next;
-			b = b->next;
-		}
+		if(a->first.crossover_position != b->first.crossover_position)
+			return 0;
+		if(b->first.execution_position != b->first.execution_position)
+			return 0;
+		for(int i = 0; i < sizeof(a->first.instructions); i++)
+			if(a->first.instructions[i] != b->first.instructions[i])
+				return 0;
+		a = a->next;
+		b = b->next;
 	}
-	return r * 100 / s;
+	if(a != NULL || b != NULL)
+		return 0;
+	return 1;
+}
+
+int save_genome(int fd, genome *g)
+{
+	int count;
+	while(g->prev != NULL)
+		g = g->prev;
+	while(g != NULL) {
+		count += write(fd, &(g->first), sizeof(g->first)) >= 0;
+		g = g->next;
+	}
+	return count;
+}
+
+genome* load_genome(int fd, int size)
+{
+	gene n;
+	genome *r = NULL;
+	genome *t = NULL;
+	while(size != 0) {
+		if(read(fd, &n, sizeof(n)) <= 0)
+			size = 0;
+		else {
+			genome *x = malloc(sizeof(genome));
+			memcpy(&(x->first), &n, sizeof(n));
+			x->next = NULL;
+			x->prev = t;
+			if(t != NULL)
+				t->next = x;
+			t = x;
+			if(r == NULL)
+				r = t;
+		}
+		if(size > 0)
+			size--;
+	}
+	return r;
 }

@@ -1,6 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include "vmgenome.h"
 #include "vm.h"
 #include "pareto.h"
@@ -88,10 +93,10 @@ void evaluate_pool(genepool *pool, eval_closure* crit, int num_criteria)
 			free(pool->candidates[i].evaluations);
 		}
 		// first element in evaluation array is age.
-		pool->candidates[i].evaluations = malloc(sizeof(int) * (num_criteria + 2));
+		pool->candidates[i].evaluations = malloc(sizeof(int) * (num_criteria + 1));
 		pool->candidates[i].evaluations[0] = 0;
 		for(int r = 0; r < num_criteria; r++) {
-			pool->candidates[i].evaluations[r + 2] = crit[r].func(pool->candidates[i].genome, crit[r].context);
+			pool->candidates[i].evaluations[r + 1] = crit[r].func(pool->candidates[i].genome, crit[r].context);
 		}
 	}
 }
@@ -123,20 +128,25 @@ genepool* spawn_genepool(genepool* parents, int size)
 	return ret;
 }
 
-void pool_age(genepool *pool)
-{
-	for(int i = 0; i < pool->num_candidates; i++) {
-		pool->candidates[i].evaluations[0]++;
-	}
-}
-
 void pool_mark_similar(genepool *pool) {
 	for(int i = 0; i < pool->num_candidates; i++) {
-		pool->candidates[i].evaluations[1] = 0;
-		for(int j = 0; j < pool->num_candidates; j++) if(i != j) {
-			pool->candidates[i].evaluations[1] +=
-					genome_compare(pool->candidates[i].genome,
-							pool->candidates[j].genome);
+		pool->candidates[i].evaluations[0] = 0;
+	}
+	for(int i = 0; i < pool->num_candidates; i++) if(pool->candidates[i].evaluations[0] != INT_MAX) {
+		for(int j = i + 1; j < pool->num_candidates; j++) {
+			if(!genome_equal(pool->candidates[i].genome, pool->candidates[j].genome)) {
+				int v = genome_compare(pool->candidates[i].genome,
+					pool->candidates[j].genome);
+				pool->candidates[i].evaluations[0] += v;
+				if(pool->candidates[j].evaluations[0] != INT_MAX) {
+					v = genome_compare(pool->candidates[j].genome,
+							pool->candidates[i].genome);
+					pool->candidates[j].evaluations[0] += v;
+				}
+			}
+			else {
+				pool->candidates[j].evaluations[0] = INT_MAX;
+			}
 		}
 	}
 }
@@ -146,12 +156,12 @@ static inline genome* readystop(genepool *pool, int *stop)
 	static int minerror = INT_MAX;
 	static int mincerror = INT_MAX;
 	for(int i = 0; i < pool->num_candidates; i++) {
-		if(pool->candidates[i].evaluations[4] < mincerror) {
-			mincerror = pool->candidates[i].evaluations[4];
+		if(pool->candidates[i].evaluations[3] < mincerror) {
+			mincerror = pool->candidates[i].evaluations[3];
 			printf("\nNew minimum error: %d\n", mincerror);
 		}
-		if(pool->candidates[i].evaluations[3] < minerror) {
-			minerror = pool->candidates[i].evaluations[3];
+		if(pool->candidates[i].evaluations[2] < minerror) {
+			minerror = pool->candidates[i].evaluations[2];
 			printf("\nNew minimum bitwise error: %d\n", minerror);
 		}
 		int a = 1;
@@ -168,26 +178,72 @@ static inline genome* readystop(genepool *pool, int *stop)
 	return NULL;
 }
 
-genome* selection_loop(eval_closure* crit, int num_criteria, int *stop)
+int save_genepool(int fd, genepool *g)
+{
+	for(int i = 0; i < g->num_candidates; i++) {
+		int count = genome_size(g->candidates[i].genome);
+		write(fd, &count, sizeof(count));
+		save_genome(fd, g->candidates[i].genome);
+	}
+}
+genepool* load_genepool(int fd)
+{
+	genepool *r = malloc(sizeof(genepool));
+	genepool *a = malloc(sizeof(genepool) + 10 * sizeof(candidate));
+	int end = 0;
+	r->num_candidates = 0;
+	r->num_criteria = 0;
+	a->num_candidates = 0;
+	a->num_criteria = 0;
+	do {
+		int size;
+		read(fd, &size, sizeof(size));
+		a->candidates[a->num_candidates].genome = load_genome(fd, size);
+		if(a->candidates[a->num_candidates].genome == NULL) {
+			end = 1;
+		}
+		else {
+			a->candidates[a->num_candidates].evaluations = NULL;
+			a->num_candidates++;
+			if(a->num_candidates == 10) {
+				r = concat_genepool(r, a);
+				a = malloc(sizeof(genepool) + 10 * sizeof(candidate));
+				a->num_candidates = 0;
+				a->num_criteria = 0;
+			}
+		}
+	} while(end == 0);
+	return concat_genepool(r,a);
+}
+
+genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *stop)
 {
 	int gc = 0;
 	genome *r = NULL;
-	genepool *m = initial_genepool(500);
+	char pfn[] = "pool99999999.cgp";
+	char ofn[] = "pool99999999.cgp";
 	evaluate_pool(m, crit, num_criteria);
 	while((r = readystop(m, stop)) == NULL) {
 		genepool *n = NULL, *x = NULL;
 		pool_mark_similar(m);
 		m = pareto_front(m, &x);
-		while(m->num_candidates < 300 && x->num_candidates > 0) {
-			pool_age(x);
-			genepool *f = pareto_front(x, &x);
-			m = concat_genepool(m, f);
+//		while(m->num_candidates < 60 && x->num_candidates > 0) {
+//		for(int i = 0; i < 2 && x->num_candidates > 0; i++) {
+//			genepool *f = pareto_front(x, &x);
+//			m = concat_genepool(m, f);
+//		}
+		{
+			int fd;
+			strncpy(ofn, pfn, sizeof(pfn));
+			sprintf(pfn, "pool%08d.cgp", gc);
+			fd = creat(pfn, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+			save_genepool(fd, m);
+			close(fd);
+			remove(ofn);
 		}
-//		if(m->num_candidates >= 1500)
-			pool_age(m);
 		printf("Generation %d: %d individuals    \r", gc++, m->num_candidates);
 		fflush(stdout);
-		n = spawn_genepool(m, 150); //originally I deleted the old one first, but that caused problems for memoization.
+		n = spawn_genepool(m, m->num_candidates >= 50 ? m->num_candidates : 50); //originally I deleted the old one first, but that caused problems for memoization.
 		delete_genepool(x);
 		evaluate_pool(n, crit, num_criteria);
 		m = concat_genepool(m, n);

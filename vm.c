@@ -254,6 +254,7 @@ int delete_heap(heapPage *heap)
 		heap = n;
 		r++;
 	}
+	return r;
 }
 
 struct buffercontext {
@@ -303,7 +304,7 @@ void eval_run(genome *g, evalset *eval)
 	vmRun(g, &env, &(eval->steps));
 	eval->heap_pages = delete_heap(env.heap);
 	eval->difference = bitwiseLevenshtein(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
-	eval->cdifference = bytewiseLevenshtein(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
+	eval->cdifference = errorfreeprogress(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
 	free(outputbuffer.buffer);
 }
 

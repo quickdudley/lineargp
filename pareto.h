@@ -23,7 +23,7 @@ typedef struct _eval_closure {
 	void *context;
 } eval_closure;
 
-genome* selection_loop(eval_closure* crit, int num_criteria, int *stop);
+genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *stop);
 void evaluate_pool(genepool *pool, eval_closure* crit, int num_criteria);
 void pool_age(genepool *pool);
 
@@ -36,5 +36,8 @@ genepool* spawn_genepool(genepool* parents, int size);
 
 void delete_genepool(genepool *scrap);
 genepool* concat_genepool(genepool *a, genepool *b);
+
+int save_genepool(int fd, genepool *g);
+genepool* load_genepool(int fd);
 
 #endif
