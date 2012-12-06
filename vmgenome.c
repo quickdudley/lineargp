@@ -302,24 +302,200 @@ static inline int isqrt(int o)
 
 int genome_compare(genome *a, genome *b)
 {
-	int r = 0;
-	int s = genome_size(a);
 	while(a->prev != NULL)
 		a = a->prev;
 	while(b->prev != NULL)
 		b = b->prev;
-	for(genome* a1 = a; a1 != NULL; a1 = a1->next) {
-		int mx = 0;
-		for(genome *b1 = b; b1 != NULL; b1 = b1->next) {
-			int x = sizeof(a->first.instructions) -
-					bytewiseLevenshtein(a1->first.instructions, sizeof(a->first.instructions),
-							b1->first.instructions, sizeof(b->first.instructions));
-			if(x > mx)
-				mx = x;
-		}
-		r += mx;
+	// Begin using the hungarian algorithm to match the most similar segments
+	// between the two genomes.
+	int w = genome_size(a);
+	{
+		int h = genome_size(b);
+		if(w < h)
+			w = h;
 	}
-	return r * 1000 / s;
+	int ms = sizeof(int) * w * w;
+	int max_match = 0;
+	int *cm = malloc(ms);
+	int *hm = malloc(ms);
+	int *lx = calloc(w, sizeof(int));
+	int *ly = calloc(w, sizeof(int));
+	int *xy = calloc(w, sizeof(int));
+	int *yx = calloc(w, sizeof(int));
+	int *cw = calloc(w, sizeof(int));
+	int *pw = calloc(w, sizeof(int));
+	int *sx = calloc(w, sizeof(int));
+	int *sy = calloc(w, sizeof(int));
+	genome *ai = a;
+	genome *bi;
+	int x, y;
+	for(x = 0; ai != NULL; x++, ai = ai->next) {
+		bi = b;
+		for(y = 0; bi != NULL; y++, bi = bi->next) {
+			int idx = x * w + y;
+			cm[idx] = 0;
+			if(ai->first.crossover_position != bi->first.crossover_position)
+				cm[idx] = 1;
+			if(ai->first.execution_position != bi->first.execution_position)
+				cm[idx] += 1;
+			cm[idx] += bytewiseLevenshtein(ai->first.instructions, sizeof(ai->first.instructions),
+					bi->first.instructions, sizeof(bi->first.instructions));
+		}
+		for(; y < w; y++)
+			cm[x * w + y] = 0;
+	}
+	for(; x < w; x++)
+		for(y = 0; y < w; y++)
+			cm[x * w + y] = 0;
+	memcpy(hm, cm, ms);
+
+	// Cost matrix is set up and copied to hm. Now reduce hm
+	for(x = 0; x < w; x++) {
+		int min = INT_MAX;
+		for(y = 0; y < w; y++) {
+			if(hm[x * w + y] < min)
+				min = hm[x * w + y];
+		}
+		for(y = 0; y < w; y++) {
+			hm[x * w + y] -= min;
+		}
+	}
+	for(y = 0; y < w; y++) {
+		int min = INT_MAX;
+		for(x = 0; x < w; x++) {
+			if(hm[x * w + y] < min)
+				min = hm[x * w + y];
+		}
+		for(x = 0; x < w; x++) {
+			hm[x * w + y] -= min;
+		}
+	}
+
+	// Setup initial feasible labeling
+	memset(ly, 0, sizeof(int) * w);
+	for(x = 0; x < w; x++) {
+		lx[x] = 0;
+		for(y = 0; y < w; y++) {
+			if(hm[x * w + y] < lx[x])
+				lx[x] = hm[x * w + y];
+		}
+	}
+
+	// Perform initial greedy matching
+	for(x = 0; x < w; x++) {
+		xy[x] = -1;
+		yx[x] = -1;
+	}
+	for(x = 0; x < w; x++) {
+		for(y = 0; y < w; y++) {
+			if(xy[x] == -1 && yx[y] == -1 && hm[x * w + y] - lx[x] - ly[y] == 0) {
+				xy[x] = y;
+				yx[y] = x;
+			}
+		}
+	}
+
+	int u;
+
+	// Fetch unmatched x;
+	for(u = 0; u < w; u++) {
+		if(xy[u] == -1) {
+			break;
+		}
+	}
+
+	memset(sx, 0, sizeof(int) * w);
+	memset(sy, 0xFF, sizeof(int) * w);
+
+	while(u < w) {
+		memset(cw, 0, sizeof(int) * w);
+		memset(pw, 0xFF, sizeof(int) * w);
+		cw[u] = 1;
+		for(y = 0; y < w; y++) {
+			sy[y] = hm[u * w + y] - lx[u] - ly[y];
+			sx[y] = u;
+		}
+		while(1) {
+			int minsx = -1, minsy = -1;
+			int minsv = INT_MAX;
+			for(int y = 0; y < w; y++) {
+				if(pw[y] == -1 && sy[y] < minsv) {
+					minsv = sy[y];
+					minsx = sx[y];
+					minsy = y;
+				}
+			}
+			if(minsv > 0) {
+				for(x = 0; x < w; x++) {
+					if(cw[x]) {
+						lx[x] += minsv;
+					}
+				}
+				for(y = 0; y < w; y++) {
+					if(pw[y] != -1) {
+						ly[y] -= minsv;
+					}
+					else {
+						sy[y] -= minsv;
+					}
+				}
+			}
+			pw[minsy] = minsx;
+			if(yx[minsy] == -1) {
+				int cy = minsy;
+				int pwk = pw[cy];
+				while(1) {
+					int tmp = xy[pwk];
+					xy[pwk] = cy;
+					yx[cy] = pwk;
+					cy = tmp;
+					if(cy == -1)
+						break;
+					pwk = pw[cy];
+				}
+				goto hungarian_reiter;
+			}
+			else {
+				int worker = yx[minsy];
+				cw[worker] = 1;
+				for(int y = 0; y < w; y++) {
+					if(pw[y] == -1) {
+						int slack = hm[worker * w + y] - lx[worker] - ly[y];
+						if(sy[y] > slack) {
+							sy[y] = slack;
+							sx[y] = worker;
+						}
+					}
+				}
+			}
+		}
+hungarian_reiter:
+		for(u = 0; u < w; u++) {
+			if(xy[u] == -1) {
+				break;
+			}
+		}
+	}
+
+	// Free memory used only for computing the matching
+	free(hm);
+	free(lx);
+	free(ly);
+	free(yx);
+	free(cw);
+	free(pw);
+	free(sx);
+	free(sy);
+
+	int r = 0;
+	for(x = 0; x < w; x++) {
+		r += (2 + sizeof(a->first.instructions)) - cm[x * w + xy[x]];
+	}
+
+	free(cm);
+	free(xy);
+
+	return r * 100 / w;
 }
 
 int genome_equal(genome *a, genome *b) {

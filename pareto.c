@@ -76,6 +76,8 @@ genepool* pareto_front(genepool *original, genepool **remainder)
 
 genepool* concat_genepool(genepool *a, genepool *b)
 {
+	if(a == b)
+		return a;
 	a = realloc(a, sizeof(genepool) + (a->num_candidates + b->num_candidates) * sizeof(candidate));
 	for(int i = a->num_candidates, j = 0; j < b->num_candidates; i++, j++) {
 		a->candidates[i] = b->candidates[j];
@@ -129,26 +131,49 @@ genepool* spawn_genepool(genepool* parents, int size)
 }
 
 void pool_mark_similar(genepool *pool) {
+	//Backup function...
+
+//	for(int i = 0; i < pool->num_candidates; i++) {
+//		pool->candidates[i].evaluations[0] = 0;
+//	}
+//	for(int i = 0; i < pool->num_candidates; i++) if(pool->candidates[i].evaluations[0] != INT_MAX) {
+//		for(int j = i + 1; j < pool->num_candidates; j++) {
+//			if(!genome_equal(pool->candidates[i].genome, pool->candidates[j].genome)) {
+//				int v = genome_compare(pool->candidates[i].genome,
+//					pool->candidates[j].genome);
+//				pool->candidates[i].evaluations[0] += v;
+//				if(pool->candidates[j].evaluations[0] != INT_MAX) {
+//					pool->candidates[j].evaluations[0] += v;
+//				}
+//			}
+//			else {
+//				pool->candidates[j].evaluations[0] = INT_MAX;
+//			}
+//		}
+//	}
+	int *med = malloc(sizeof(int) * pool->num_candidates);
 	for(int i = 0; i < pool->num_candidates; i++) {
-		pool->candidates[i].evaluations[0] = 0;
-	}
-	for(int i = 0; i < pool->num_candidates; i++) if(pool->candidates[i].evaluations[0] != INT_MAX) {
-		for(int j = i + 1; j < pool->num_candidates; j++) {
-			if(!genome_equal(pool->candidates[i].genome, pool->candidates[j].genome)) {
-				int v = genome_compare(pool->candidates[i].genome,
-					pool->candidates[j].genome);
-				pool->candidates[i].evaluations[0] += v;
-				if(pool->candidates[j].evaluations[0] != INT_MAX) {
-					v = genome_compare(pool->candidates[j].genome,
-							pool->candidates[i].genome);
-					pool->candidates[j].evaluations[0] += v;
+		for(int j = 0; j < pool->num_candidates; j++) {
+			med[j] = genome_compare(pool->candidates[i].genome, pool->candidates[j].genome);
+		}
+		for(int x = 0; x < pool->num_candidates; x++) {
+			for(int y = x + 1; y < pool->num_candidates; y++) {
+				if(med[y] > med[x]) {
+					int t = med[y];
+					med[y] = med[x];
+					med[x] = t;
 				}
 			}
-			else {
-				pool->candidates[j].evaluations[0] = INT_MAX;
-			}
+		}
+		int d = pool->num_candidates / 2;
+		if(pool->num_candidates % 2 == 0) {
+			pool->candidates[i].evaluations[0] = (int)(((long long int)(med[d]) + med[d + 1]) / 2);
+		}
+		else {
+			pool->candidates[i].evaluations[0] = med[d];
 		}
 	}
+	free(med);
 }
 
 static inline genome* readystop(genepool *pool, int *stop)
@@ -246,6 +271,10 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 		n = spawn_genepool(m, m->num_candidates >= 50 ? m->num_candidates : 50); //originally I deleted the old one first, but that caused problems for memoization.
 		delete_genepool(x);
 		evaluate_pool(n, crit, num_criteria);
+		if(m->num_candidates >= 1500) {
+			delete_genepool(m);
+			m = n;
+		}
 		m = concat_genepool(m, n);
 	}
 	return r;
