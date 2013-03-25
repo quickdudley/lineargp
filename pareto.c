@@ -21,14 +21,21 @@ void delete_genepool(genepool *scrap)
 
 genepool* pareto_front(genepool *original, genepool **remainder)
 {
+	if(original->num_candidates <= 200) {
+		*remainder = NULL;
+		return original;
+	}
 	int dc = 0;
 	int fc = 0;
+	int fl = 1;
 	genepool *r;
+	for(int i = 0; i < original->num_candidates; i++) {
+		original->candidates[i].dominated = 0;
+	}
 	/* Mark candidates as dominated if another candidate exists which has a lower or
 	 * equal cost value for every criterion. */
 	for(int i = 0; i < original->num_candidates; i++) {
-		original->candidates[i].dominated = 0;
-		for(int j = 0; !(original->candidates[i].dominated) && j < original->num_candidates; j++) if(i != j){
+		for(int j = 0; j < original->num_candidates; j++) if(i != j){
 			int td = 1;
 			int eq = 1;
 			for(int c = 0; td && c < original->num_criteria; c++) {
@@ -37,7 +44,6 @@ genepool* pareto_front(genepool *original, genepool **remainder)
 				/* If a < b then b does not dominate a */
 				if(a < b) {
 					td = 0;
-					break;
 				}
 				/* if b < a then b will dominate a if there is no other criterion
 				 * where a < b */
@@ -45,31 +51,79 @@ genepool* pareto_front(genepool *original, genepool **remainder)
 					eq = 0;
 				}
 			}
-			original->candidates[i].dominated = td && !eq;
-		}
-		if(original->candidates[i].dominated) {
-			dc++;
+			// I hear it's bad to let 2 candidates take the same spot on the pareto front
+			// This hack just demotes one to the next front. LaterI'll try removing duplicates instead
+			if(td && eq && original->candidates[i].dominated == original->candidates[j].dominated) {
+				if(random() & 1) {
+					td = 0;
+					original->candidates[j].evaluations[0]++;
+				} else {
+					eq = 0;
+					original->candidates[i].evaluations[0]++;
+				}
+			}
+			if(td && !eq && original->candidates[i].dominated <= original->candidates[j].dominated)
+				original->candidates[i].dominated = original->candidates[j].dominated + 1;
+			if(eq && !td && original->candidates[j].dominated <= original->candidates[i].dominated)
+				original->candidates[j].dominated = original->candidates[i].dominated + 1;
+			if(original->candidates[i].dominated > fl || original->candidates[j].dominated > fl) {
+				i = original->candidates[i].dominated;
+				j = original->candidates[j].dominated;
+				fl = i > j ? i : j;
+				i = -1; // this will be incremented before use
+				j = -1;
+				break;
+			}
 		}
 	}
 
-	fc = original->num_candidates - dc;
+	// Heapsort
+	for(int i = original->num_candidates - 1; i > 0; i--) {
+		int p = (i - 1) / 2;
+		if(original->candidates[i].dominated > original->candidates[p].dominated) {
+			candidate t = original->candidates[i];
+			original->candidates[i] = original->candidates[p];
+			original->candidates[p] = t;
+		}
+	}
+	for(int i = original->num_candidates - 1; i > 0; i--) {
+		int j = 0;
+		candidate t;
+		if(original->candidates[0].dominated > original->candidates[i].dominated)
+		{
+			t = original->candidates[0];
+			original->candidates[0] = original->candidates[i];
+			original->candidates[i] = t;
+		}
+		while(j < i - 1) {
+			int c = 2 * j + 1;
+			if(c < i - 2 && original->candidates[c].dominated < original->candidates[c + 1].dominated) {
+				c++;
+			}
+			if(c < i - 1 && original->candidates[c].dominated > original->candidates[j].dominated) {
+				t = original->candidates[c];
+				original->candidates[c] = original->candidates[j];
+				original->candidates[j] = t;
+			} else {
+				break;
+			}
+			j = c;
+		}
+	}
+	fc = 200;
+	fl = original->candidates[fc].dominated;
+	while(original->candidates[fc + 1].dominated == fl)
+		fc++;
+	dc = original->num_candidates - fc;
+
 	r = malloc(sizeof(genepool) + fc * sizeof(candidate));
 	r->num_candidates = fc;
 	r->num_criteria = original->num_criteria;
 	*remainder = malloc(sizeof(genepool) + dc * sizeof(candidate));
 	(*remainder)->num_candidates = dc;
 	(*remainder)->num_criteria = original->num_criteria;
-	for(int a=0, b=0; a + b < original->num_candidates;) {
-		candidate c = original->candidates[a + b];
-		if(c.dominated) {
-			(*remainder)->candidates[b] = c;
-			b++;
-		}
-		else {
-			r->candidates[a] = c;
-			a++;
-		}
-	}
+	memcpy(r->candidates, original->candidates, sizeof(candidate) * fc);
+	memcpy((*remainder)->candidates, &(original->candidates[fc]), sizeof(candidate) * dc);
 	free(original);
 	return r;
 }
@@ -120,60 +174,45 @@ genepool* spawn_genepool(genepool* parents, int size)
 	ret->num_candidates = size;
 	for(int i = 0; i < size; i++) {
 		ret->candidates[i].evaluations = NULL;
-		genome *p[2];
-		for(int j = 0; j < 2; j++) {
-			p[j] = parents->candidates[random() % parents->num_candidates].genome;
+		if(random() & 1) {
+			genome *p[2];
+			for(int j = 0; j < 2; j++) {
+				p[j] = parents->candidates[random() % parents->num_candidates].genome;
+			}
+			ret->candidates[i].genome = crossover_genome(p[0], p[1]);
+		} else {
+			ret->candidates[i].genome = copy_genome(parents->candidates[random() % parents->num_candidates].genome);
 		}
-		ret->candidates[i].genome = crossover_genome(p[0], p[1]);
 		mutate_genome(ret->candidates[i].genome);
 	}
 	return ret;
 }
 
 void pool_mark_similar(genepool *pool) {
-	//Backup function...
-
-//	for(int i = 0; i < pool->num_candidates; i++) {
-//		pool->candidates[i].evaluations[0] = 0;
-//	}
-//	for(int i = 0; i < pool->num_candidates; i++) if(pool->candidates[i].evaluations[0] != INT_MAX) {
-//		for(int j = i + 1; j < pool->num_candidates; j++) {
-//			if(!genome_equal(pool->candidates[i].genome, pool->candidates[j].genome)) {
-//				int v = genome_compare(pool->candidates[i].genome,
-//					pool->candidates[j].genome);
-//				pool->candidates[i].evaluations[0] += v;
-//				if(pool->candidates[j].evaluations[0] != INT_MAX) {
-//					pool->candidates[j].evaluations[0] += v;
+//	int *med = malloc(sizeof(int) * pool->num_candidates);
+	for(int i = 0; i < pool->num_candidates; i++) {
+		pool->candidates[i].evaluations[0] = 0;
+//		for(int j = 0; j < pool->num_candidates; j++) {
+//			med[j] = genome_compare(pool->candidates[i].genome, pool->candidates[j].genome);
+//		}
+//		for(int x = 0; x < pool->num_candidates; x++) {
+//			for(int y = x + 1; y < pool->num_candidates; y++) {
+//				if(med[y] > med[x]) {
+//					int t = med[y];
+//					med[y] = med[x];
+//					med[x] = t;
 //				}
 //			}
-//			else {
-//				pool->candidates[j].evaluations[0] = INT_MAX;
-//			}
 //		}
-//	}
-	int *med = malloc(sizeof(int) * pool->num_candidates);
-	for(int i = 0; i < pool->num_candidates; i++) {
-		for(int j = 0; j < pool->num_candidates; j++) {
-			med[j] = genome_compare(pool->candidates[i].genome, pool->candidates[j].genome);
-		}
-		for(int x = 0; x < pool->num_candidates; x++) {
-			for(int y = x + 1; y < pool->num_candidates; y++) {
-				if(med[y] > med[x]) {
-					int t = med[y];
-					med[y] = med[x];
-					med[x] = t;
-				}
-			}
-		}
-		int d = pool->num_candidates / 2;
-		if(pool->num_candidates % 2 == 0) {
-			pool->candidates[i].evaluations[0] = (int)(((long long int)(med[d]) + med[d + 1]) / 2);
-		}
-		else {
-			pool->candidates[i].evaluations[0] = med[d];
-		}
+//		int d = pool->num_candidates / 2;
+//		if(pool->num_candidates % 2 == 0) {
+//			pool->candidates[i].evaluations[0] = (int)(((long long int)(med[d]) + med[d + 1]) / 2);
+//		}
+//		else {
+//			pool->candidates[i].evaluations[0] = med[d];
+//		}
 	}
-	free(med);
+//	free(med);
 }
 
 static inline genome* readystop(genepool *pool, int *stop)
@@ -250,8 +289,18 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 	evaluate_pool(m, crit, num_criteria);
 	while((r = readystop(m, stop)) == NULL) {
 		genepool *n = NULL, *x = NULL;
-		pool_mark_similar(m);
-		m = pareto_front(m, &x);
+		int ns;
+		do {
+			genepool *xn = NULL;
+			ns = m->num_candidates;
+			pool_mark_similar(m);
+			m = pareto_front(m, &xn);
+			if(x != NULL) {
+				x = concat_genepool(x, xn);
+			} else {
+				x = xn;
+			}
+		} while(m->num_candidates > 1500 && ns != m->num_candidates);
 //		while(m->num_candidates < 60 && x->num_candidates > 0) {
 //		for(int i = 0; i < 2 && x->num_candidates > 0; i++) {
 //			genepool *f = pareto_front(x, &x);
@@ -269,12 +318,9 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 		printf("Generation %d: %d individuals    \r", gc++, m->num_candidates);
 		fflush(stdout);
 		n = spawn_genepool(m, m->num_candidates >= 50 ? m->num_candidates : 50); //originally I deleted the old one first, but that caused problems for memoization.
-		delete_genepool(x);
+		if(x != NULL)
+			delete_genepool(x);
 		evaluate_pool(n, crit, num_criteria);
-		if(m->num_candidates >= 1500) {
-			delete_genepool(m);
-			m = n;
-		}
 		m = concat_genepool(m, n);
 	}
 	return r;

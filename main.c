@@ -40,7 +40,7 @@ int main(int argc, char ** args)
 	}
 	eval.input = "";
 	eval.input_len = 0;
-	eval.target = "Taumatawhakatangihangakoauauotamateapokaiwhenuakitanatahu";
+	eval.target = "123456789";
 	eval.target_len = strlen(eval.target);
 	if(e == NULL) {
 		e = initial_genepool(50);

@@ -1,9 +1,18 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 
 #include "vm.h"
 #include "levenshtein.h"
+
+jmp_buf jmpdst;
+
+void sigfpeHandler(int signum) {
+	if(signum == SIGFPE) {
+		longjmp(jmpdst, 1);
+	}
+}
 
 int * getMem(heapPage ** m, unsigned int address) {
 	int block = address / 1024;
@@ -155,63 +164,72 @@ int vmStep(genome **g, environment *env) {
 		return 0;
 	}
 	else if(h == 0xF0) {
-		switch(l) {
-		case 0x0:
-			env->rgs[env->s1] = env->rgs[env->s1] + env->rgs[env->s2];
-			break;
-		case 0x1:
-			env->rgs[env->s1] = env->rgs[env->s1] - env->rgs[env->s2];
-			break;
-		case 0x2:
-			env->rgs[env->s1] = env->rgs[env->s1] * env->rgs[env->s2];
-			break;
-		case 0x3:
-			if(env->rgs[env->s2] == 0) {
+		signal(SIGFPE, sigfpeHandler);
+		if(!setjmp(jmpdst)) {
+			switch(l) {
+			case 0x0:
+				env->rgs[env->s1] = env->rgs[env->s1] + env->rgs[env->s2];
+				break;
+			case 0x1:
+				env->rgs[env->s1] = env->rgs[env->s1] - env->rgs[env->s2];
+				break;
+			case 0x2:
+				env->rgs[env->s1] = env->rgs[env->s1] * env->rgs[env->s2];
+				break;
+			case 0x3:
+				if(env->rgs[env->s2] == 0) {
+					env->rgs[env->s1] = 0;
+					return -1;
+				}
+				else {
+					env->rgs[env->s1] = env->rgs[env->s1] / env->rgs[env->s2];
+				}
+				break;
+			case 0x4:
+				if(env->rgs[env->s2] == 0) {
+					env->rgs[env->s1] = 0;
+					return -1;
+				}
+				else {
+					env->rgs[env->s1] = env->rgs[env->s1] % env->rgs[env->s2];
+				}
+				break;
+			case 0x5:
+				env->rgs[env->s1] = ~(env->rgs[env->s2]);
+				break;
+			case 0x6:
+				env->rgs[env->s1] = env->rgs[env->s1] & env->rgs[env->s2];
+				break;
+			case 0x7:
+				env->rgs[env->s1] = env->rgs[env->s1] | env->rgs[env->s2];
+				break;
+			case 0x8:
+				env->rgs[env->s1] = env->rgs[env->s1] << env->rgs[env->s2];
+				break;
+			case 0x9:
+				env->rgs[env->s1] = env->rgs[env->s1] >> env->rgs[env->s2];
+				break;
+			case 0xA:
+			case 0xC:
+			case 0xE:
 				env->rgs[env->s1] = 0;
-				return -1;
+				break;
+			case 0xB:
+			case 0xD:
+				env->rgs[env->s1] = 1;
+				break;
+			case 0xF:
+				env->rgs[env->s1] = 0xFFFFFFFF;
+				break;
 			}
-			else {
-				env->rgs[env->s1] = env->rgs[env->s1] / env->rgs[env->s2];
-			}
-			break;
-		case 0x4:
-			if(env->rgs[env->s2] == 0) {
-				env->rgs[env->s1] = 0;
-				return -1;
-			}
-			else {
-				env->rgs[env->s1] = env->rgs[env->s1] % env->rgs[env->s2];
-			}
-			break;
-		case 0x5:
-			env->rgs[env->s1] = ~(env->rgs[env->s2]);
-			break;
-		case 0x6:
-			env->rgs[env->s1] = env->rgs[env->s1] & env->rgs[env->s2];
-			break;
-		case 0x7:
-			env->rgs[env->s1] = env->rgs[env->s1] | env->rgs[env->s2];
-			break;
-		case 0x8:
-			env->rgs[env->s1] = env->rgs[env->s1] << env->rgs[env->s2];
-			break;
-		case 0x9:
-			env->rgs[env->s1] = env->rgs[env->s1] >> env->rgs[env->s2];
-			break;
-		case 0xA:
-		case 0xC:
-		case 0xE:
+			return 0;
+		} else {
 			env->rgs[env->s1] = 0;
-			break;
-		case 0xB:
-		case 0xD:
-			env->rgs[env->s1] = 1;
-			break;
-		case 0xF:
-			env->rgs[env->s1] = 0xFFFFFFFF;
-			break;
+			sigset_t sigs;
+			sigemptyset (&sigs);
+			sigaddset (&sigs, SIGFPE);
+			sigprocmask (SIG_UNBLOCK, &sigs, NULL);
 		}
-		return 0;
 	}
 	return -1;
 }

@@ -1,6 +1,11 @@
 #ifndef _vm_h
 #define _vm_h 1
+
+#include <setjmp.h>
+
 #include "vmgenome.h"
+
+jmp_buf jmpbuf;
 
 typedef struct _heapPage {
 	int base;

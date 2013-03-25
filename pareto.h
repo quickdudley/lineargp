@@ -13,7 +13,7 @@ typedef struct _candidate {
 typedef struct _genepool {
 	int num_candidates;
 	int num_criteria;
-	candidate candidates[0];
+	candidate candidates[];
 } genepool;
 
 typedef int (*eval_func)(genome *g, void *context);
