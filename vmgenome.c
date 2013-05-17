@@ -6,7 +6,7 @@
 #include "vmgenome.h"
 #include "levenshtein.h"
 
-#define MUTATION_THRESHOLD (RAND_MAX / 17)
+#define MUTATION_THRESHOLD (RAND_MAX / 10)
 
 static void sort_genome(genome * unsorted, int criterion);
 
@@ -147,8 +147,9 @@ void mutate_genome(genome *x)
 	while(x->prev != NULL)
 		x = x->prev;
 	genome *t = x;
+	int local_rate = random() % MUTATION_THRESHOLD;
 	while(t != NULL) {
-		if(random() < MUTATION_THRESHOLD) {
+		if(random() < local_rate && random() < local_rate) {
 			t->first.crossover_position = random() / 2;
 			genome *c = x;
 			while(c != NULL) {
@@ -158,7 +159,7 @@ void mutate_genome(genome *x)
 				c = c->next;
 			}
 		}
-		if(random() < MUTATION_THRESHOLD) {
+		if(random() < local_rate && random() < local_rate) {
 			t->first.execution_position = random() / 2;
 			genome *c = x;
 			while(c != NULL) {
@@ -168,7 +169,7 @@ void mutate_genome(genome *x)
 				c = c->next;
 			}
 		}
-		if(random() < MUTATION_THRESHOLD) {
+		if(random() < local_rate) {
 			char tmp[sizeof(t->first.instructions)];
 			int rs = random() & 0xFF;
 			for(int i = 0; i < sizeof(tmp); i++) {
@@ -179,7 +180,7 @@ void mutate_genome(genome *x)
 			}
 		}
 		for(int i = 0; i < sizeof(t->first.instructions); i++) {
-			if(random() < MUTATION_THRESHOLD) {
+			if(random() < local_rate) {
 				t->first.instructions[i] = (char)(random() & 0xFF);
 			}
 		}
@@ -187,7 +188,7 @@ void mutate_genome(genome *x)
 	}
 	// Mutation to add one random gene: mutation to remove one doesn't seem necessary
 	// because the crossover operator can remove or duplicate genes.
-	if(random() < MUTATION_THRESHOLD && random() < MUTATION_THRESHOLD) {
+	if(random() < local_rate && random() < local_rate) {
 		t = random_genome(1);
 		t->next = x;
 		x->prev = t;

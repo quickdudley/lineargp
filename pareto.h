@@ -6,8 +6,9 @@
 
 typedef struct _candidate {
 	genome *genome;
-	int *evaluations; //first age, followed by results of evaluation functions
+	int *evaluations; //first the crowding penalty, followed by results of evaluation functions
 	int dominated;
+	int age;
 } candidate;
 
 typedef struct _genepool {
@@ -23,6 +24,9 @@ typedef struct _eval_closure {
 	void *context;
 } eval_closure;
 
+extern int poolsize_hover;
+extern int spawn_factor;
+
 genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *stop);
 void evaluate_pool(genepool *pool, eval_closure* crit, int num_criteria);
 void pool_age(genepool *pool);
@@ -31,7 +35,7 @@ void pool_age(genepool *pool);
 // Does not preserve original.
 genepool* pareto_front(genepool *original, genepool **remainder);
 
-genepool* initial_genepool(int size);
+genepool* initial_genepool(int size, int length);
 genepool* spawn_genepool(genepool* parents, int size);
 
 void delete_genepool(genepool *scrap);

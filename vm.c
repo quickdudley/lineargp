@@ -135,16 +135,14 @@ int vmStep(genome **g, environment *env) {
 		return 0;
 	} 
 	else if(h == 0xC0) {
-		if(env->ii[env->fd].source != NULL) {
+		if(env->ii[env->fd].source != NULL && env->ii[env->fd].exhausted == 0) {
 			env->rgs[l] = env->ii[env->fd].source(env->ii[env->fd].context);
 			if(env->rgs[l] == -1) {
-				if(env->ii[env->fd].exhausted) {
-					return -1;
-				} else {
-					env->ii[env->fd].exhausted = 1;
-				}
+				env->ii[env->fd].exhausted = 1;
 			}
 			return 0;
+		} else {
+			env->rgs[l] = -1;
 		}
 	}
 	else if(h == 0xD0) {
@@ -235,20 +233,19 @@ int vmStep(genome **g, environment *env) {
 }
 
 int vmRun(genome *g, environment *env, long long int *steps){
-	int penalty;
-	int s = *steps;
+	int penalty = 0;
+	long long int s = 0;
 	sort_execute(g);
-	while(s > 0) {
+	while(s < *steps) {
 		int result = vmStep(&g, env);
 		env->pc = env->pcn;
 		if(result > 0) {
-			*steps -= s;
-			s = 0;
+			*steps = s;
 			penalty += result - 1;
 		} else {
 			penalty -= result;
 		}
-		s--;
+		s++;
 	}
 	return penalty;
 }
@@ -313,30 +310,18 @@ void eval_run(genome *g, evalset *eval)
 	inputbuffer.buffer = eval->input;
 	outputbuffer.pos = 0;
 	outputbuffer.length = (int)(eval->target_len * 1.75) + 1;
-	outputbuffer.buffer = malloc(outputbuffer.length);
+	outputbuffer.buffer = malloc(outputbuffer.length + 1);
+	memset(outputbuffer.buffer, 0, outputbuffer.length + 1); // zero for debugging
 	env.ii[0].source = bufferInput;
 	env.ii[0].context = &inputbuffer;
 	env.oo[0].sink = bufferOutput;
 	env.oo[0].context = &outputbuffer;
 	eval->steps = 200000;
-	vmRun(g, &env, &(eval->steps));
+	eval->illegal = vmRun(g, &env, &(eval->steps));
 	eval->heap_pages = delete_heap(env.heap);
-	eval->difference = bitwiseLevenshtein(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
-	eval->cdifference = errorfreeprogress(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
+	eval->manhattan_error = manhattanDifference(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
+	eval->suffix_error = errorfreeprogress(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
 	free(outputbuffer.buffer);
-}
-
-int eval_error(genome *g, evalset *eval)
-{
-	eval_run(g, eval);
-	return eval->difference;
-}
-
-int eval_cerror(genome*g, evalset *eval)
-{
-	eval_run(g, eval);
-	if(eval->cdifference == 16)
-	return eval->cdifference;
 }
 
 int eval_runtime(genome *g, evalset *eval)
@@ -349,4 +334,22 @@ int eval_memory(genome *g, evalset *eval)
 {
 	eval_run(g, eval);
 	return eval->heap_pages;
+}
+
+int eval_illegal(genome *g, evalset *eval)
+{
+	eval_run(g, eval);
+	return eval->illegal;
+}
+
+int eval_manhattan(genome *g, evalset *eval)
+{
+	eval_run(g, eval);
+	return eval->manhattan_error;
+}
+
+int eval_suffix(genome *g, evalset *eval)
+{
+	eval_run(g,eval);
+	return eval->suffix_error;
 }

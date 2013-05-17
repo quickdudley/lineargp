@@ -1,12 +1,15 @@
-OBJECTS = main.o vmgenome.o vm.o levenshtein.o pareto.o
+OBJECTS = vmgenome.o vm.o levenshtein.o pareto.o -lm
 
-all: vmgenome
+all: vmgenome runvm
 
 clean:
 	rm vmgenome $(OBJECTS)
 
-vmgenome: $(OBJECTS)
-	gcc -g $(OBJECTS) -o vmgenome
+vmgenome: main.o $(OBJECTS)
+	gcc -g main.o $(OBJECTS) -o vmgenome
+
+runvm: runvm.o $(OBJECTS)
+	gcc -g runvm.o $(OBJECTS) -o runvm
 
 %.o : %.c
 	gcc -g -std=gnu99 -c $< -o $@

@@ -4,7 +4,7 @@
 typedef struct _gene {
 	int crossover_position;
 	int execution_position;
-	char instructions[16];
+	unsigned char instructions[16];
 } gene;
 
 typedef struct _genome {

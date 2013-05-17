@@ -55,18 +55,20 @@ typedef struct _evalset {
 	genome *last_genome;
 	int heap_pages;
 	long long int steps;
-	int difference;
-	int cdifference;
+	int manhattan_error;
+	int suffix_error;
+	int illegal;
 	char *target;
 	int target_len;
 	char *input;
 	int input_len;
 } evalset;
 
-void eval_run(genome *g, evalset *eval);
-int eval_error(genome *g, evalset *eval);
-int eval_cerror(genome*g, evalset *eval);
-int eval_runtime(genome *g, evalset *eval);
-int eval_memory(genome *g, evalset *eval);
+extern void eval_run(genome *g, evalset *eval);
+extern int eval_runtime(genome *g, evalset *eval);
+extern int eval_memory(genome *g, evalset *eval);
+extern int eval_manhattan(genome *g, evalset *eval);
+extern int eval_suffix(genome *g, evalset *eval);
+extern int eval_illegal(genome *g, evalset *eval);
 
 #endif

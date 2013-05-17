@@ -119,6 +119,61 @@ int errorfreeprogress(char *a, size_t asize, char *b, size_t bsize)
 	return count;
 }
 
+int gcsDifference(char *a, size_t asize, char *b, size_t bsize)
+{
+	if(asize > bsize) {
+		char *t = a;
+		size_t tsize = asize;
+		a = b;
+		asize = bsize;
+		b = t;
+		bsize = tsize;
+	}
+	int width = asize * 8;
+	int height = bsize * 8;
+	if(width == 0) {
+		return height;
+	}
+	int *m[2];
+	int gcs = 0;
+	for(int i = 0; i < 2; i++) {
+		m[i] = malloc(width * sizeof(int));
+	}
+	for(int y = 0; y < height; y++) {
+		for(int x = 0; x < width; x++) {
+			int od;
+			od = y == 0 ? 0 : (x == 0 ? 0 : m[y & 1][x - 1]);
+			if((((a[x / 8]) >> (8 - x % 8)) & 1) == (((b[y / 8]) >> (8 - y % 8)) & 1)) {
+				m[!(y & 1)][x] = od + 1;
+			}
+			else {
+				m[!(y & 1)][x] = 0;
+			}
+			if(m[!(y & 1)][x] > gcs){
+				gcs = m[!(y & 1)][x];
+			}
+		}
+	}
+
+	for(int i = 0; i < 2; i++) {
+		free(m[i]);
+	}
+	return height - gcs;
+}
+
+int manhattanDifference(char *a, size_t asize, char *b, size_t bsize)
+{
+	size_t l = asize > bsize ? asize : bsize;
+	size_t s = asize < bsize ? asize : bsize;
+	int total = 0;
+	for(int i = 0; i < s * 8; i++) {
+		if((((a[i / 8]) >> (8 - i % 8)) & 1) == (((b[i / 8]) >> (8 - i % 8)) & 1)) {
+			total++;
+		}
+	}
+	return l * 8 - total;
+}
+
 /* Main function for testing */
 //int main(int argc, char **args)
 //{
