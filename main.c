@@ -74,14 +74,6 @@ int main(int argc, char ** args)
 				}
 			}
 		}
-		else if(!strcmp(args[i], "-p")) {
-			int success, value;
-			i++;
-			success = sscanf(args[i], "%d", &value);
-			if(success) {
-				poolsize_hover = value;
-			}
-		}
 		else if(!strcmp(args[i], "-f")) {
 			int success, value;
 			i++;
@@ -137,6 +129,7 @@ int main(int argc, char ** args)
 	if(e == NULL) {
 		e = initial_genepool(50, 16);
 	}
+	poolsize_hover = e->num_candidates;
 	r = selection_loop(e, crit, 1 + 5 * batches, stop);
 	int len = genome_size(r);
 	int of = creat("finished.cgp", S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);

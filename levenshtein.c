@@ -166,9 +166,11 @@ int manhattanDifference(char *a, size_t asize, char *b, size_t bsize)
 	size_t l = asize > bsize ? asize : bsize;
 	size_t s = asize < bsize ? asize : bsize;
 	int total = 0;
-	for(int i = 0; i < s * 8; i++) {
-		if((((a[i / 8]) >> (8 - i % 8)) & 1) == (((b[i / 8]) >> (8 - i % 8)) & 1)) {
-			total++;
+	for(int i = 0; i < s; i++) {
+		for(unsigned char j = 0x80; j != 0; j = j >> 1) {
+			if((a[i] & j) == (b[i] & j)) {
+				total++;
+			}
 		}
 	}
 	return l * 8 - total;
