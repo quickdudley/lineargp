@@ -36,23 +36,64 @@ static front_value* fValue(genepool* p)
 	return r;
 }
 
-static int fvImproved(front_value *previous, front_value *current)
-{
-	for(int i = 0; i < current->size; i++) {
-		int found = 0;
-		for(int j = 0; !found && j < previous->size; j++) {
-			int match = 1;
-			for(int k = 0; match && k < current->criteria; k++) {
-				match = match && (previous->values[i * previous->criteria + k] ==
-						current->values[j * current->criteria + k]);
+static front_value* fvMerge(front_value *a, front_value *b, int *improvement) {
+	front_value *r = malloc(sizeof(front_value) + sizeof(int) * a->criteria * (a->size + b->size));
+	int ii = 0;
+	r->criteria = a->criteria;
+	for(int i = 0; i < a->size; i++) {
+		int inc = 1;
+		for(int j = 0; inc && j < b->size; j++) {
+			int td = 0;
+			int eq = 1;
+			for(int c = 0; c < a->criteria; c++) {
+				int aa = a->values[i * a->criteria + c];
+				int bb = b->values[j * b->criteria + c];
+				if(aa > bb) {
+					td = 1;
+				} else if (bb > aa) {
+					eq = 0;
+				}
 			}
-			found = match;
+			if(td && eq) {
+				inc = 0;
+			}
 		}
-		if(!found) {
-			return 1;
+		if(inc) {
+			for(int c = 0; c < a->criteria; c++) {
+				r->values[ii * r->criteria + c] = a->values[i * a->criteria + c];
+			}
+			ii++;
 		}
 	}
-	return 0;
+	for(int j = 0; j < b->size; j++) {
+		int inc = 1;
+		for(int i = 0; inc && i < a->size; i++) {
+			int td = 0;
+			int eq = 1;
+			for(int c = 0; c < a->criteria; c++) {
+				int aa = a->values[i * a->criteria + c];
+				int bb = b->values[j * b->criteria + c];
+				if(aa > bb) {
+					td = 1;
+				} else if (bb > aa) {
+					eq = 0;
+				}
+			}
+			if(!td) {
+				inc = 0;
+			}
+		}
+		if(inc) {
+			*improvement = 1;
+			for(int c = 0; c < b->criteria; c++) {
+				r->values[ii * r->criteria + c] = b->values[j * b->criteria + c];
+			}
+			ii++;
+		}
+	}
+	r->size = ii;
+	// I tried to use realloc() here but it just segfaulted.
+	return r;
 }
 
 void update_filter(int *filter, int *stop, genepool *p)
@@ -135,7 +176,7 @@ void age_genepool(genepool *pool)
 	}
 }
 
-genepool* pareto_front(genepool *original, genepool **remainder)
+genepool* pareto_front(genepool *original, genepool **remainder, int resultsize, int *conditions)
 {
 	int fc = 0;
 	int i = 0;
@@ -145,13 +186,17 @@ genepool* pareto_front(genepool *original, genepool **remainder)
 		original->candidates[i].evaluations[0] = 0;
 	}
 	/* Topological sort by pareto dominance */
-	for(i = 0; i < original->num_candidates && ((i < poolsize_hover && i < original->num_candidates) || fc == original->candidates[i].dominated); i++) {
+	for(i = 0; i < original->num_candidates && ((i < resultsize && i < original->num_candidates) || fc == original->candidates[i].dominated); i++) {
 		for(int j = i + 1; j < original->num_candidates; j++) {
 			int td = 1;
 			int eq = 1;
 			for(int c = 0; c < original->num_criteria; c++) {
 				int a = original->candidates[i].evaluations[c];
 				int b = original->candidates[j].evaluations[c];
+				if (c != 0) {
+					a = conditions ? (a > conditions[c - 1] ? a : conditions[c - 1]) : a;
+					b = conditions ? (b > conditions[c - 1] ? b : conditions[c - 1]) : b;
+				}
 				/* If a < b then b does not dominate a */
 				if(a < b) {
 					td = 0;
@@ -390,30 +435,34 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 		genepool *xn = NULL;
 		ns = m->num_candidates;
 		//m = filter_genepool(m, filter, &xn);
+		m = pareto_front(m, &xn, (int)(poolsize_hover * (1 + spawn_factor / 2.0)) + 1, stop);
 		if(x != NULL) {
 			x = concat_genepool(x, xn);
 		} else {
 			x = xn;
 		}
-		m = pareto_front(m, &xn);
+		m = pareto_front(m, &xn, poolsize_hover, NULL);
+		if(x != NULL) {
+			x = concat_genepool(x, xn);
+		} else {
+			x = xn;
+		}
 		//update_filter(filter, stop, m);
 		if(cfv == NULL) {
 			cfv = fValue(m);
 		} else {
 			front_value *nfv = fValue(m);
-			int improved = fvImproved(nfv, cfv);
+			front_value *tfv = nfv;
+			int improved = 0;
+			nfv = fvMerge(cfv, nfv, &improved);
 			free(cfv);
+			free(tfv);
 			cfv = nfv;
 			if(improved) {
 				poolsize_hover = poolsize_hover * 0.75 + 2;
 			} else {
-				poolsize_hover = poolsize_hover + 1;
+				poolsize_hover = poolsize_hover * 1.05 + 1;
 			}
-		}
-		if(x != NULL) {
-			x = concat_genepool(x, xn);
-		} else {
-			x = xn;
 		}
 		{
 			int fd;
@@ -440,6 +489,9 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 		evaluate_pool(n, crit, num_criteria);
 		age_genepool(m);
 		m = concat_genepool(m, n);
+	}
+	if(cfv != NULL) {
+		free(cfv);
 	}
 	return r;
 }

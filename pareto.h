@@ -33,7 +33,7 @@ void pool_age(genepool *pool);
 
 // Returns the pareto optimal set, puts the remainder into remainder.
 // Does not preserve original.
-genepool* pareto_front(genepool *original, genepool **remainder);
+genepool* pareto_front(genepool *original, genepool **remainder, int resultsize, int *conditions);
 
 genepool* initial_genepool(int size, int length);
 genepool* spawn_genepool(genepool* parents, int size);

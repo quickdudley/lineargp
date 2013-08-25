@@ -7,6 +7,7 @@
 #include "levenshtein.h"
 
 jmp_buf jmpdst;
+int maxsteps = 200000;
 
 void sigfpeHandler(int signum) {
 	if(signum == SIGFPE) {
@@ -316,7 +317,7 @@ void eval_run(genome *g, evalset *eval)
 	env.ii[0].context = &inputbuffer;
 	env.oo[0].sink = bufferOutput;
 	env.oo[0].context = &outputbuffer;
-	eval->steps = 200000;
+	eval->steps = maxsteps;
 	eval->illegal = vmRun(g, &env, &(eval->steps));
 	eval->heap_pages = delete_heap(env.heap);
 	eval->manhattan_error = manhattanDifference(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);

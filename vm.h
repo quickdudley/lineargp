@@ -64,6 +64,8 @@ typedef struct _evalset {
 	int input_len;
 } evalset;
 
+extern int maxsteps;
+
 extern void eval_run(genome *g, evalset *eval);
 extern int eval_runtime(genome *g, evalset *eval);
 extern int eval_memory(genome *g, evalset *eval);

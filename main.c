@@ -124,7 +124,7 @@ int main(int argc, char ** args)
 		crit[i + 4].func = (eval_func)eval_illegal;
 	}
 	for(int i = 1; i < 6 * batches; i++) {
-		crit[i].context = (void*)&(eval[(i - 1) / 6]);
+		crit[i].context = (void*)&(eval[(i - 1) / 5]);
 	}
 	if(e == NULL) {
 		e = initial_genepool(50, 16);
