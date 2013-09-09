@@ -186,7 +186,7 @@ genepool* pareto_front(genepool *original, genepool **remainder, int resultsize,
 		original->candidates[i].evaluations[0] = 0;
 	}
 	/* Topological sort by pareto dominance */
-	for(i = 0; i < original->num_candidates && ((i < resultsize && i < original->num_candidates) || fc == original->candidates[i].dominated); i++) {
+	for(i = 0; i < original->num_candidates && (i < resultsize || original->candidates[i].dominated <= original->candidates[resultsize - 1].dominated); i++) {
 		for(int j = i + 1; j < original->num_candidates; j++) {
 			int td = 1;
 			int eq = 1;
@@ -230,7 +230,6 @@ genepool* pareto_front(genepool *original, genepool **remainder, int resultsize,
 				original->candidates[j] = t;
 				j = i;
 			}
-			fc = original->candidates[i].dominated;
 		}
 	}
 
@@ -379,7 +378,7 @@ static inline genome* readystop(genepool *pool, int *stop)
 	return NULL;
 }
 
-int save_genepool(int fd, genepool *g)
+void save_genepool(int fd, genepool *g)
 {
 	for(int i = 0; i < g->num_candidates; i++) {
 		int count = genome_size(g->candidates[i].genome);
@@ -435,7 +434,7 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 		genepool *xn = NULL;
 		ns = m->num_candidates;
 		//m = filter_genepool(m, filter, &xn);
-		m = pareto_front(m, &xn, (int)(poolsize_hover * (1 + spawn_factor / 2.0)) + 1, stop);
+		m = pareto_front(m, &xn, (int)(poolsize_hover * 0.9 + m->num_candidates * 0.1), stop);
 		if(x != NULL) {
 			x = concat_genepool(x, xn);
 		} else {
@@ -448,6 +447,15 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 			x = xn;
 		}
 		//update_filter(filter, stop, m);
+		int youngest = INT_MAX;
+		int oldest = INT_MIN;
+		for(int i = 0; i < m->num_candidates; i++) {
+			if (youngest > m->candidates[i].age)
+				youngest = m->candidates[i].age;
+			if (oldest < m->candidates[i].age)
+				oldest = m->candidates[i].age;
+		}
+		printf("Generation %d: %d/%d individuals, ages %d - %d    \r", gc++, m->num_candidates, poolsize_hover, youngest, oldest);
 		if(cfv == NULL) {
 			cfv = fValue(m);
 		} else {
@@ -473,15 +481,6 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 			close(fd);
 			remove(ofn);
 		}
-		int youngest = INT_MAX;
-		int oldest = INT_MIN;
-		for(int i = 0; i < m->num_candidates; i++) {
-			if (youngest > m->candidates[i].age)
-				youngest = m->candidates[i].age;
-			if (oldest < m->candidates[i].age)
-				oldest = m->candidates[i].age;
-		}
-		printf("Generation %d: %d individuals, ages %d - %d    \r", gc++, m->num_candidates, youngest, oldest);
 		fflush(stdout);
 		n = spawn_genepool(m, poolsize_hover * spawn_factor); //originally I deleted the old one first, but that caused problems for memoization.
 		if(x != NULL)

@@ -121,6 +121,7 @@ int errorfreeprogress(char *a, size_t asize, char *b, size_t bsize)
 
 int gcsDifference(char *a, size_t asize, char *b, size_t bsize)
 {
+	int swapped = 0;
 	if(asize > bsize) {
 		char *t = a;
 		size_t tsize = asize;
@@ -128,11 +129,12 @@ int gcsDifference(char *a, size_t asize, char *b, size_t bsize)
 		asize = bsize;
 		b = t;
 		bsize = tsize;
+		swapped = 1;
 	}
 	int width = asize * 8;
 	int height = bsize * 8;
 	if(width == 0) {
-		return height;
+		return swapped ? 0 : height;
 	}
 	int *m[2];
 	int gcs = 0;
@@ -158,7 +160,7 @@ int gcsDifference(char *a, size_t asize, char *b, size_t bsize)
 	for(int i = 0; i < 2; i++) {
 		free(m[i]);
 	}
-	return height - gcs;
+	return (swapped ? width : height) - gcs;
 }
 
 int manhattanDifference(char *a, size_t asize, char *b, size_t bsize)

@@ -41,7 +41,7 @@ genepool* spawn_genepool(genepool* parents, int size);
 void delete_genepool(genepool *scrap);
 genepool* concat_genepool(genepool *a, genepool *b);
 
-int save_genepool(int fd, genepool *g);
+void save_genepool(int fd, genepool *g);
 genepool* load_genepool(int fd);
 
 #endif
