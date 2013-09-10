@@ -176,7 +176,7 @@ void age_genepool(genepool *pool)
 	}
 }
 
-genepool* pareto_front(genepool *original, genepool **remainder, int resultsize, int *conditions)
+genepool* pareto_front(genepool *original, genepool **remainder, int resultsize, eval_closure *conditions)
 {
 	int fc = 0;
 	int i = 0;
@@ -185,45 +185,51 @@ genepool* pareto_front(genepool *original, genepool **remainder, int resultsize,
 		original->candidates[i].dominated = 0;
 		original->candidates[i].evaluations[0] = 0;
 	}
-	/* Topological sort by pareto dominance */
+	/* Topological sort by pareto dominance, aka solve the longest path problem
+	 * for a directed acyclic graph */
 	for(i = 0; i < original->num_candidates && (i < resultsize || original->candidates[i].dominated <= original->candidates[resultsize - 1].dominated); i++) {
 		for(int j = i + 1; j < original->num_candidates; j++) {
-			int td = 1;
-			int eq = 1;
+			double td = 0;
+			double eq = 0;
 			for(int c = 0; c < original->num_criteria; c++) {
 				int a = original->candidates[i].evaluations[c];
 				int b = original->candidates[j].evaluations[c];
-				if (c != 0) {
-					a = conditions ? (a > conditions[c - 1] ? a : conditions[c - 1]) : a;
-					b = conditions ? (b > conditions[c - 1] ? b : conditions[c - 1]) : b;
-				}
+				double pressure = c == 0 ? 1 : conditions[c - 1].pressure;
 				/* If a < b then b does not dominate a */
 				if(a < b) {
-					td = 0;
+					td = pressure > td ? pressure : td;
 				}
 				/* if b < a then b will dominate a if there is no other criterion
 				 * where a < b */
 				if(b < a) {
-					eq = 0;
+					eq = pressure > eq ? pressure : eq;
 				}
 			}
 			// If two candidates appear the same then:
 			// Demote one at random to the next front. This actually prioritises newer candidates
 			// because they are compared fewer times than older candidates.
-			if(td && eq) {
+			if(!td && !eq) {
 				if(original->candidates[i].age < original->candidates[j].age ||
 						(original->candidates[i].age == original->candidates[j].age && (random() & 1))) {
-					td = 0;
+					td = 1;
 					original->candidates[j].evaluations[0]++;
 				} else {
-					eq = 0;
+					eq = 1;
 					original->candidates[i].evaluations[0]++;
 				}
 			}
-			if(td && !eq && original->candidates[i].dominated <= original->candidates[j].dominated)
-				original->candidates[i].dominated = original->candidates[j].dominated + 1;
-			if(eq && !td && original->candidates[j].dominated <= original->candidates[i].dominated)
-				original->candidates[j].dominated = original->candidates[i].dominated + 1;
+			if(!td && eq && original->candidates[i].dominated <= original->candidates[j].dominated) {
+				double d = original->candidates[j].dominated + eq;
+				if(original->candidates[i].dominated < d) {
+					original->candidates[i].dominated = d;
+				}
+			}
+			if(!eq && td && original->candidates[j].dominated <= original->candidates[i].dominated) {
+				double d = original->candidates[i].dominated + td;
+				if(original->candidates[j].dominated < d) {
+					original->candidates[j].dominated = d;
+				}
+			}
 			if(original->candidates[j].dominated < original->candidates[i].dominated) {
 				candidate t = original->candidates[i];
 				original->candidates[i] = original->candidates[j];
@@ -290,42 +296,21 @@ genepool* initial_genepool(int size, int length)
 	return ret;
 }
 
-
-/*
- * Just selecting individuals at random does eventually get the job done, since the best
- * are always guaranteed to survive, but biasing the selection greatly reduces the number
- * of generations required.
- */
-//static int biased_random(genepool *source)
-//{
-//	// Initial biased index: I don't understand this part but deong from stack overflow's
-//	// professor does.
-//	double bias = 1.5;
-//	double r = (double)random() / (double)RAND_MAX;
-//	int x = (int)(source->num_candidates * (bias - sqrt(bias*bias -4.0*(bias-1.0)* r)));
-//	// Now take into account areas of the genepool with equal rankings.
-//	int l = x;
-//	int h = x;
-//	while(l > 0 && source->candidates[l - 1].dominated == source->candidates[x].dominated)
-//		l--;
-//	while(h < source->num_candidates && source->candidates[h].dominated == source->candidates[x].dominated)
-//		h++;
-//	x = l + random() % (h - l);
-//	return x;
-//}
-
 genepool* spawn_genepool(genepool* parents, int size)
 {
 	genepool *ret = malloc(sizeof(genepool) + sizeof(candidate) * size);
 	ret->num_candidates = size;
 	for(int i = 0; i < size; i++) {
 		ret->candidates[i].evaluations = NULL;
-		if(random() & 1) {
+		if(!(random() & 3)) {
 			genome *p[2];
 			for(int j = 0; j < 2; j++) {
 				p[j] = parents->candidates[random() % parents->num_candidates].genome;
 			}
 			ret->candidates[i].genome = crossover_genome(p[0], p[1]);
+			if(random() & 1) {
+				mutate_genome(ret->candidates[i].genome);
+			}
 		} else {
 			ret->candidates[i].genome = copy_genome(parents->candidates[random() % parents->num_candidates].genome);
 			mutate_genome(ret->candidates[i].genome);
@@ -334,16 +319,9 @@ genepool* spawn_genepool(genepool* parents, int size)
 	return ret;
 }
 
-static inline genome* readystop(genepool *pool, int *stop)
+static inline genome* readystop(genepool *pool, eval_closure *stop)
 {
 	static int *minerror = NULL;
-	static char *errorname[] = {
-			"manhattan difference",
-			"error by suffix",
-			"heap use",
-			"runtime",
-			"illegal instructions"
-	};
 	if(minerror == NULL) {
 		int length = pool->num_criteria * sizeof(int);
 		minerror = malloc(length);
@@ -355,18 +333,12 @@ static inline genome* readystop(genepool *pool, int *stop)
 		for(int em = 0; em < pool->num_criteria; em++) {
 			if(pool->candidates[i].evaluations[em + 1] < minerror[em]) {
 				minerror[em] = pool->candidates[i].evaluations[em + 1];
-				if(em == 0) {
-					printf("\nNew minimum genome size: %d\n", minerror[em]);
-				} else {
-					int batch = (em - 1) / 5 + 1;
-					int test = (em - 1) % 5;
-					printf("\nNew minimum %s case %d: %d\n", errorname[test], batch, minerror[em]);
-				}
+					printf("\nNew minimum %s: %d\n", stop[em].label, minerror[em]);
 			}
 		}
 		int a = 1;
 		for(int j = 1; j < pool->num_criteria; j++) {
-			if(pool->candidates[i].evaluations[j] > stop[j - 1]) {
+			if(pool->candidates[i].evaluations[j] > stop[j - 1].stop) {
 				a = 0;
 				break;
 			}
@@ -416,7 +388,7 @@ genepool* load_genepool(int fd)
 	return concat_genepool(r,a);
 }
 
-genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *stop)
+genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria)
 {
 	int gc = 0;
 	genome *r = NULL;
@@ -428,19 +400,18 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 		filter[i] = INT_MAX;
 	}
 	evaluate_pool(m, crit, num_criteria);
-	while((r = readystop(m, stop)) == NULL) {
+	while((r = readystop(m, crit)) == NULL) {
 		genepool *n = NULL, *x = NULL;
 		int ns;
 		genepool *xn = NULL;
 		ns = m->num_candidates;
 		//m = filter_genepool(m, filter, &xn);
-		m = pareto_front(m, &xn, (int)(poolsize_hover * 0.9 + m->num_candidates * 0.1), stop);
 		if(x != NULL) {
 			x = concat_genepool(x, xn);
 		} else {
 			x = xn;
 		}
-		m = pareto_front(m, &xn, poolsize_hover, NULL);
+		m = pareto_front(m, &xn, poolsize_hover, crit);
 		if(x != NULL) {
 			x = concat_genepool(x, xn);
 		} else {
@@ -456,6 +427,7 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 				oldest = m->candidates[i].age;
 		}
 		printf("Generation %d: %d/%d individuals, ages %d - %d    \r", gc++, m->num_candidates, poolsize_hover, youngest, oldest);
+		/* Detect whether or not we are stuck in a local optimum */
 		if(cfv == NULL) {
 			cfv = fValue(m);
 		} else {
@@ -467,9 +439,11 @@ genome* selection_loop(genepool *m, eval_closure* crit, int num_criteria, int *s
 			free(tfv);
 			cfv = nfv;
 			if(improved) {
+				/* local optimum not detected: can reduce population */
 				poolsize_hover = poolsize_hover * 0.75 + 2;
 			} else {
-				poolsize_hover = poolsize_hover * 1.05 + 1;
+				/* Apparent local optimum: increase population to escape it */
+				poolsize_hover = poolsize_hover * 1.005 + 1;
 			}
 		}
 		{

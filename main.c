@@ -22,7 +22,6 @@ int main(int argc, char ** args)
 	int batchn = 0;
 	genome *r;
 	genepool *e = NULL;
-	int *stop;
 	for(int i = 1; i < argc; i++) {
 		if(!strcasecmp(args[i], "-io")) {
 			batches++;
@@ -32,13 +31,12 @@ int main(int argc, char ** args)
 	crit = malloc((1 + 5 * batches) * sizeof(eval_closure));
 	eval = malloc(5 * batches * sizeof(evalset));
 	memset(eval, 0, 5 * batches * sizeof(evalset));
-	stop = malloc((1 + 5 * batches) * sizeof(int));
-	stop[0] = INT_MAX;
+	crit[0].stop = INT_MAX;
 	for(int i = 0; i < 5 * batches; i++) {
 		if(i % 5 < 2) {
-			stop[i + 1] = 0;
+			crit[i + 1].stop = 0;
 		} else {
-			stop[i + 1] = INT_MAX;
+			crit[i + 1].stop = INT_MAX;
 		}
 	}
 	for(int i = 1; i < argc; i++) {
@@ -116,12 +114,30 @@ int main(int argc, char ** args)
 	}
 	srand(time(0));
 	crit[0].func = eval_genome_size;
+	crit[0].pressure = 1.0 / 128;
+	crit[0].label = "genome size";
 	for(int i = 1; i < batches * 5; i += 5) {
+		int b = (i - 1) / 5 + 1;
 		crit[i].func = (eval_func)eval_manhattan;
+		crit[i].pressure = 1;
+		crit[i].label = malloc(38);
+		sprintf(crit[i].label, "manhattan distance: batch %d", b);
 		crit[i + 1].func = (eval_func)eval_suffix;
+		crit[i + 1].pressure = 1;
+		crit[i + 1].label = malloc(38);
+		sprintf(crit[i + 1].label, "error by suffix: batch %d", b);
 		crit[i + 2].func = (eval_func)eval_memory;
+		crit[i + 2].pressure = 0.1;
+		crit[i + 2].label = malloc(38);
+		sprintf(crit[i + 2].label, "memory blocks used: batch %d", b);
 		crit[i + 3].func = (eval_func)eval_runtime;
+		crit[i + 3].pressure = 0.1;
+		crit[i + 3].label = malloc(38);
+		sprintf(crit[i + 3].label, "runtime: batch %d", b);
 		crit[i + 4].func = (eval_func)eval_illegal;
+		crit[i + 4].pressure = 0.3;
+		crit[i + 4].label = malloc(38);
+		sprintf(crit[i + 4].label, "illegal instructions: batch %d", b);
 	}
 	for(int i = 1; i < 6 * batches; i++) {
 		crit[i].context = (void*)&(eval[(i - 1) / 5]);
@@ -130,7 +146,7 @@ int main(int argc, char ** args)
 		e = initial_genepool(50, 16);
 	}
 	poolsize_hover = e->num_candidates;
-	r = selection_loop(e, crit, 1 + 5 * batches, stop);
+	r = selection_loop(e, crit, 1 + 5 * batches);
 	int len = genome_size(r);
 	int of = creat("finished.cgp", S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
 	write(of, &len, sizeof(len));
