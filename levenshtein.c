@@ -95,6 +95,57 @@ int bytewiseLevenshtein(char *a, size_t asize, char *b, size_t bsize)
 	return asize;
 }
 
+int alignedlevenshtein(char *a, size_t asize, char *b, size_t bsize)
+{
+	if(asize > bsize) {
+		char *t = a;
+		size_t tsize = asize;
+		a = b;
+		asize = bsize;
+		b = t;
+		bsize = tsize;
+	}
+	if(asize == 0) {
+		return bsize * 8;
+	}
+	int *m[2];
+
+	for(int i = 0; i < 2; i++) {
+		m[i] = malloc(asize * sizeof(int));
+	}
+	for(int y = 0; y < bsize; y++) {
+		for(int x = 0; x < asize; x++) {
+			int od, ou, ol;
+			int cost, p, c;
+			od = y == 0 ? x * 8 : (x == 0 ? y * 8 : m[y & 1][x - 1]);
+			ou = y == 0 ? (x + 1) * 8 : m[y & 1][x];
+			ol = x == 0 ? (y + 1) * 8 : m[!(y & 1)][x - 1];
+			cost = 0;
+			for(int bit = 0x80; bit != 0; bit = bit >> 1) {
+				if((a[x] & bit) != (b[y] & bit)) {
+					cost += 1;
+				}
+			}
+			p = od + cost;
+			ou += 8;
+			ol += 8;
+			if(p > ou)
+				p = ou;
+			if(p > ol)
+				p = ol;
+			m[!(y & 1)][x] = p;
+		}
+	}
+	asize = m[bsize & 1][asize - 1]; // reusing the variable
+	for(int i = 0; i < 2; i++) {
+		free(m[i]);
+	}
+	if(asize <= 12) {
+		int x = 0;
+	}
+	return asize;
+}
+
 int errorfreeprogress(char *a, size_t asize, char *b, size_t bsize)
 {
 	int count = bsize * 8;

@@ -4,6 +4,7 @@
 
 extern int bitwiseLevenshtein(char *a, size_t asize, char *b, size_t bsize);
 extern int bytewiseLevenshtein(char *a, size_t asize, char *b, size_t bsize);
+extern int alignedlevenshtein(char *a, size_t asize, char *b, size_t bsize);
 extern int errorfreeprogress(char *a, size_t asize, char *b, size_t bsize);
 extern int gcsDifference(char *a, size_t asize, char *b, size_t bsize);
 extern int manhattanDifference(char *a, size_t asize, char *b, size_t bsize);

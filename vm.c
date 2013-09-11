@@ -320,7 +320,7 @@ void eval_run(genome *g, evalset *eval)
 	eval->steps = maxsteps;
 	eval->illegal = vmRun(g, &env, &(eval->steps));
 	eval->heap_pages = delete_heap(env.heap);
-	eval->manhattan_error = manhattanDifference(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
+	eval->manhattan_error = alignedlevenshtein(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
 	eval->suffix_error = errorfreeprogress(outputbuffer.buffer, outputbuffer.pos, eval->target, eval->target_len);
 	free(outputbuffer.buffer);
 }

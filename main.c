@@ -120,8 +120,8 @@ int main(int argc, char ** args)
 		int b = (i - 1) / 5 + 1;
 		crit[i].func = (eval_func)eval_manhattan;
 		crit[i].pressure = 1;
-		crit[i].label = malloc(38);
-		sprintf(crit[i].label, "manhattan distance: batch %d", b);
+		crit[i].label = malloc(40);
+		sprintf(crit[i].label, "levenshtein distance: batch %d", b);
 		crit[i + 1].func = (eval_func)eval_suffix;
 		crit[i + 1].pressure = 1;
 		crit[i + 1].label = malloc(38);
